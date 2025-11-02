@@ -50,6 +50,26 @@
     gap:6px;
     min-width:0;
   }
+  .version-chip{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:12px;
+    color:var(--muted);
+  }
+  .version-chip .badge{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:2px 8px;
+    border-radius:999px;
+    background:var(--ink);
+    color:#fff;
+    font-weight:600;
+    font-size:11px;
+    line-height:1;
+    letter-spacing:0.015em;
+  }
   .controls-center{
     position:relative;
     height:36px;                 /* Fixe Zeilenhöhe -> Kopf bleibt flach */
@@ -146,8 +166,11 @@
   .right{text-align:right}
   .empty{padding:24px;text-align:center;color:var(--muted)}
   .desc{white-space:pre-wrap;line-height:1.35em;word-break:break-word;overflow-wrap:anywhere}
-  .sortable{cursor:pointer}
-  .sortable:after{content:"↕";font-size:12px;margin-left:6px;opacity:.6}
+  .no-sort{
+    cursor:default;
+    user-select:text;
+  }
+  .no-sort::after{display:none !important;content:none !important;}
   .qty{width:70px;text-align:right}
   .qty::placeholder{color:#bbb}
 
@@ -204,12 +227,36 @@
   }
   .toast.show{opacity:1;transform:translateY(0)}
 
+  .print-portal{display:none}
+  .print-footer{display:none;position:fixed;left:0;right:0;bottom:0;padding:4mm 12mm;font-size:10pt;display:flex;justify-conte
+nt:space-between;align-items:center;color:#555;font-family:-apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial;background:rgba(255,255,255,.96);}
+  .print-footer span{white-space:nowrap}
+  .print-footer-right{text-align:right}
+
+  @page {
+    size: A4 landscape;
+    margin: 12mm;
+  }
+
   @media print{
-    .controls,.filters,.table-wrap{display:none}
-    .summary{border:none;padding:0; position:static; transform:none; box-shadow:none}
-    .meta-inputs{display:none}
-    #summaryTableWrap table th,#summaryTableWrap table td{ display: table-cell !important; visibility: visible !important; }
-    thead th{ background:#fff6e6 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    body{
+      background:#fff;
+    }
+    header, .controls, .filters, .summary, .toast, .drawer, .drawer-head, .drawer-body, .wrap > .panel > .table-wrap{display:no
+ne !important}
+    .print-portal{display:block !important}
+    body[data-print-mode] .print-footer{display:flex !important}
+    body[data-print-mode] .print-page::after{content:counter(page)}
+    body[data-print-mode] .print-pages::after{content:counter(pages)}
+    body[data-print-mode] .print-portal{padding-bottom:18mm}
+    body[data-print-mode] .print-portal table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:10pt}
+    body[data-print-mode] .print-portal thead th{background:#fff6e6;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    body[data-print-mode] .print-portal th,body[data-print-mode] .print-portal td{padding:4px 6px;border-bottom:1px solid #d9dd
+e4;vertical-align:top}
+    body[data-print-mode] .print-portal tr{break-inside:avoid}
+    body[data-print-mode] .print-portal .group-row{background:#fff9ed;font-weight:600}
+    body[data-print-mode] .print-portal .group-row td{padding-top:6px;padding-bottom:6px}
+    body[data-print-mode] .print-portal .desc{white-space:pre-wrap;line-height:1.35em}
   }
 
   @media (max-width:1200px){
@@ -236,6 +283,10 @@
     <div class="controls" id="controls">
       <div class="controls-left">
         <span class="inline-title">Haas Artikelpreisliste (Vertrieb)</span>
+        <div class="version-chip" id="versionChip" title="">
+          <span>Programmversion</span>
+          <span class="badge" id="versionBadge">–</span>
+        </div>
         <!-- versteckter Datei-Input: nur Klick per Button -->
         <input id="file" type="file" accept=".xlsx,.xlsm" style="display:none" />
         <button id="reset" class="pill" title="Filter zurücksetzen">Zurücksetzen</button>
@@ -278,7 +329,7 @@
         <thead id="thead">
           <tr>
             <th>Art.Nr.</th><th>Kurztext</th><th>Beschreibung</th><th>EH</th><th>EH-Info</th>
-            <th id="thPreis" class="right sortable">EH-Preis</th><th>Menge</th><th class="right">Gesamtpreis</th><th>Hinweis</th>
+            <th id="thPreis" class="right no-sort">EH-Preis</th><th>Menge</th><th class="right">Gesamtpreis</th><th>Hinweis</th>
           </tr>
         </thead>
         <tbody id="rows"><tr class="empty"><td colspan="9">Noch keine Daten geladen.</td></tr></tbody>
@@ -315,6 +366,11 @@
     </div>
 
     <div id="toast" class="toast">Aktualisiert</div>
+    <div id="printPortal" class="print-portal" aria-hidden="true"></div>
+    <div id="printFooter" class="print-footer" aria-hidden="true">
+      <span class="print-footer-left">Haas Preisliste · <span id="printVersion">–</span> · generiert: <span id="printTimestamp">–</span></span>
+      <span class="print-footer-right">Seite <span class="print-page" data-counter="page"></span> / <span class="print-pages" data-counter="pages"></span></span>
+    </div>
   </div>
 </div>
 
