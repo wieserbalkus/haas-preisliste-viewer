@@ -308,14 +308,17 @@ function render(){
 /* >>> Immer zum Listenanfang springen */
 function jumpToTop(){ $('#tableWrap').scrollTop = 0; }
 
-function updatePrintFooterMeta(){
-  const el = document.getElementById('printPriceListName');
-  if(!el) return;
+function getCurrentPriceListLabel(){
   const sheet = (CURRENT_SHEET || '').trim();
   const currentFileEl = $('#currentFile');
   const fileText = currentFileEl && currentFileEl.textContent ? currentFileEl.textContent.trim() : '';
-  const text = sheet || fileText || '–';
-  el.textContent = text;
+  return sheet || fileText || '–';
+}
+
+function updatePrintFooterMeta(){
+  const el = document.getElementById('printPriceListName');
+  if(!el) return;
+  el.textContent = getCurrentPriceListLabel();
 }
 
 /* ===== Dynamische Höhe ===== */
@@ -484,6 +487,7 @@ function buildPrintDoc(){
   const BETR=($('#betreffInput')?.value||'').trim()||'–';
   const DAT=new Date().toLocaleDateString('de-AT');
   const SHEET = CURRENT_SHEET || '–';
+  const PRICE_LIST = getCurrentPriceListLabel();
 
   let tbody=''; let total=0;
   items.forEach(it=>{
@@ -501,8 +505,9 @@ function buildPrintDoc(){
 
   return `<!DOCTYPE html><html lang="de"><head><meta charset="utf-8"><title>Kostenvoranschlag</title>
   <style>
-    @page { size: A4 portrait; margin: 16mm 14mm 16mm 14mm; }
-    body{ font:12px/1.35 -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial; color:#111; }
+    @page { size: A4 portrait; margin: 16mm 14mm 32mm 14mm; }
+    body{ font:12px/1.35 -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial; color:#111; margin:0; }
+    main{ padding-bottom:34mm; }
 
     .p-head{ display:grid; grid-template-columns: 1fr auto; column-gap: 16px; align-items:flex-start; margin-bottom:10px; }
     .title{ font-size:18px; font-weight:800; margin:0 0 6px 0; }
@@ -527,8 +532,14 @@ function buildPrintDoc(){
     .grand-total .value{ text-align:right; }
 
     .note{ margin-top:12px; font-size:11px; color:#374151; }
+
+    .page-footer{ position:fixed; left:0; right:0; bottom:0; padding:0 14mm 12mm; font-size:11px; color:#111; display:flex; justify-content:space-between; align-items:center; }
+    .page-footer-right{ white-space:nowrap; font-variant-numeric:tabular-nums; }
+    .page-footer-right .page-num::after{ content:counter(page); }
+    .page-footer-right .page-total::after{ content:counter(pages); }
   </style></head><body>
 
+    <main>
     <div class="p-head">
       <div>
         <h1 class="title">Kostenvoranschlag</h1>
@@ -563,6 +574,12 @@ function buildPrintDoc(){
       Änderungen, Irrtümer und Preisänderungen vorbehalten.
       <br>Hinweis: Grundlage der Preise laut <b>${escapeHtml(SHEET)}</b>.
     </div>
+    </main>
+
+    <footer class="page-footer" aria-hidden="true">
+      <div>www.haas-fertigbau.at | Preise gemäß ${escapeHtml(PRICE_LIST)}</div>
+      <div class="page-footer-right">Seite <span class="page-num"></span> / <span class="page-total"></span></div>
+    </footer>
 
   </body></html>`;
 }

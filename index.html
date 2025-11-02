@@ -207,23 +207,16 @@
   }
   .toast.show{opacity:1;transform:translateY(0)}
 
-  .print-footer{display:none;}
-
   @page {
     margin: 18mm 16mm 26mm 16mm;
   }
 
   @media print{
-    body{padding-bottom:24mm;}
     .controls,.filters,.table-wrap{display:none}
     .summary{border:none;padding:0; position:static; transform:none; box-shadow:none}
     .meta-inputs{display:none}
     #summaryTableWrap table th,#summaryTableWrap table td{ display: table-cell !important; visibility: visible !important; }
     thead th{ background:#fff6e6 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-    .print-footer{display:flex;position:fixed;left:16mm;right:16mm;bottom:12mm;font-size:11px;color:#111827;justify-content:space-between;align-items:center;}
-    .print-footer-right{white-space:nowrap;}
-    .print-footer-right .page-num::after{content:counter(page);}
-    .print-footer-right .page-total::after{content:counter(pages);}
   }
 
   @media (max-width:1200px){
@@ -331,11 +324,6 @@
     <div id="toast" class="toast">Aktualisiert</div>
   </div>
 </div>
-
-  <div class="print-footer" aria-hidden="true">
-    <div class="print-footer-left">www.haas-fertigbau.at | Preise gemäß <span id="printPriceListName">–</span></div>
-    <div class="print-footer-right">Seite <span class="page-num"></span> / <span class="page-total"></span></div>
-  </div>
 
   <script defer src="app.js"></script>
 </body>
