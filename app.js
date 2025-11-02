@@ -507,11 +507,14 @@ function buildPrintDoc(){
   <style>
     @page {
       size: A4 portrait;
-      margin: 12mm 14mm 16mm 14mm;
+      margin: 10mm 14mm 12mm 14mm;
+      counter-reset: page 0;
+      counter-increment: page;
       @bottom-center { content: element(summaryFooter); }
     }
     body{ font:12px/1.35 -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial; color:#111; margin:0; }
-    main{ padding-bottom:10mm; }
+    main{ padding-bottom:0; }
+    main::after{ content:""; display:block; height:12mm; }
 
     .p-head{ display:grid; grid-template-columns: 1fr auto; column-gap: 16px; align-items:flex-start; margin-bottom:10px; }
     .title{ font-size:18px; font-weight:800; margin:0 0 6px 0; }
@@ -537,12 +540,12 @@ function buildPrintDoc(){
 
     .note{ margin-top:12px; font-size:11px; color:#374151; }
 
-    .page-footer{ position:running(summaryFooter); font-size:11px; color:#111; display:flex; justify-content:space-between; align-items:center; padding:0; margin:0; width:100%; box-sizing:border-box; gap:16px; flex-wrap:wrap; }
+    .page-footer{ position:running(summaryFooter); font-size:11px; color:#111; display:flex; justify-content:space-between; align-items:flex-end; padding:1.2mm 0 0.8mm; margin:0; width:100%; box-sizing:border-box; gap:16px; flex-wrap:wrap; }
     .page-footer-left{ flex:1 1 auto; }
     .page-footer-right{ white-space:nowrap; font-variant-numeric:tabular-nums; }
     .page-footer-right .page-num,
     .page-footer-right .page-total{ display:inline-block; min-width:1.6em; text-align:right; }
-    .page-footer-right .page-num::after{ content:counter(page); }
+    .page-footer-right .page-num::after{ content:counter(page, decimal); }
     @media screen { .page-footer{ display:none; } }
   </style></head><body>
 
@@ -590,8 +593,9 @@ function buildPrintDoc(){
 
     <script>
       (function(){
-        const TOP_MARGIN_MM = 12;
-        const BOTTOM_MARGIN_MM = 16;
+        const TOP_MARGIN_MM = 10;
+        const BOTTOM_MARGIN_MM = 12;
+        const CONTENT_BOTTOM_BUFFER_MM = 12;
         let pxPerMm = 0;
 
         function ensurePxPerMm(){
@@ -612,7 +616,7 @@ function buildPrintDoc(){
           const scale = ensurePxPerMm();
           if(!scale) return;
 
-          const printableHeight = Math.max((297 - (TOP_MARGIN_MM + BOTTOM_MARGIN_MM)) * scale, 1);
+          const printableHeight = Math.max(((297 - (TOP_MARGIN_MM + BOTTOM_MARGIN_MM)) * scale) - (CONTENT_BOTTOM_BUFFER_MM * scale), 1);
           const contentHeight = main.scrollHeight;
           if(!contentHeight || !Number.isFinite(contentHeight)) return;
 
