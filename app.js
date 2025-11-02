@@ -97,6 +97,7 @@ let GROUPS=[], LAST_WB=null, SORT={col:null,dir:1};
 let DRAWER_OPEN = false;
 let CURRENT_SHEET = '';
 const SELECTED = new Map();
+let GROUP_SWITCH_ANIM = Promise.resolve();
 
 /* ================= Excel lesen ======================== */
 function extractRows(ws){
@@ -307,6 +308,16 @@ function render(){
 /* >>> Immer zum Listenanfang springen */
 function jumpToTop(){ $('#tableWrap').scrollTop = 0; }
 
+function updatePrintFooterMeta(){
+  const el = document.getElementById('printPriceListName');
+  if(!el) return;
+  const sheet = (CURRENT_SHEET || '').trim();
+  const currentFileEl = $('#currentFile');
+  const fileText = currentFileEl && currentFileEl.textContent ? currentFileEl.textContent.trim() : '';
+  const text = sheet || fileText || '–';
+  el.textContent = text;
+}
+
 /* ===== Dynamische Höhe ===== */
 function recomputeChromeOffset(){
   const controls = document.getElementById('controls');
@@ -339,6 +350,7 @@ async function loadFromSelectedSheet(wb){
   GROUPS=buildGroups(rows); fillGroupFilter(); render();
   SELECTED.clear(); renderSummary(false);
   requestAnimationFrame(()=>{ jumpToTop(); recomputeChromeOffset(); });
+  updatePrintFooterMeta();
   saveState({sheet:name});
 }
 
@@ -350,6 +362,7 @@ $('#file').addEventListener('change', async e=>{
   if(!/\.(xlsx|xlsm)$/i.test(f.name)){ setStatus('warn','Nur <b>.xlsx</b> oder <b>.xlsm</b> erlaubt.',3500); e.target.value=''; return; }
   setStatus('info','Lade Datei…',2500);
   $('#currentFile').textContent=f.name;
+  updatePrintFooterMeta();
   const wb=await loadWorkbook(f); await loadFromSelectedSheet(wb);
   setDrawer(false); setStatus('ok','Bereit.',1500);
   $('#manualBtn').style.display='none';
@@ -360,8 +373,33 @@ $('#file').addEventListener('change', async e=>{
 });
 
 document.querySelector('#groupFilter').addEventListener('change', ()=>{
-  render();
-  requestAnimationFrame(()=>{ jumpToTop(); recomputeChromeOffset(); });
+  const wrap = document.getElementById('tableWrap');
+  const duration = 180;
+  const timing = {duration, easing:'ease', fill:'forwards'};
+  const run = async ()=>{
+    if(wrap && typeof wrap.animate === 'function'){
+      try{ await wrap.animate([{opacity:1},{opacity:0.08}], timing).finished; }
+      catch{}
+    }else if(wrap){
+      wrap.style.transition='opacity 180ms ease';
+      wrap.style.opacity='0';
+      await new Promise(res=>setTimeout(res, duration));
+    }
+
+    render();
+    jumpToTop();
+    recomputeChromeOffset();
+
+    if(wrap && typeof wrap.animate === 'function'){
+      try{ await wrap.animate([{opacity:0.08},{opacity:1}], timing).finished; }
+      catch{}
+      wrap.style.opacity='';
+    }else if(wrap){
+      wrap.style.opacity='';
+      wrap.style.transition='';
+    }
+  };
+  GROUP_SWITCH_ANIM = GROUP_SWITCH_ANIM.then(()=>run()).catch(()=>{});
 });
 
 const sheetSel=$('#sheetSel'); let lastSheetValue=null;
@@ -383,7 +421,6 @@ $('#reset').addEventListener('click', ()=>{
   render(); SELECTED.clear(); renderSummary(false); setDrawer(false); setStatus('info','Zurückgesetzt.',1500);
   requestAnimationFrame(()=>{ jumpToTop(); recomputeChromeOffset(); });
 });
-$('#thPreis').addEventListener('click',()=>{ SORT.col='preis'; SORT.dir*= -1; render(); });
 
 function setDrawer(open){
   DRAWER_OPEN=!!open;
@@ -558,6 +595,7 @@ window.addEventListener('DOMContentLoaded', async ()=>{
 
   /* erste Messung vor Autoload */
   recomputeChromeOffset();
+  updatePrintFooterMeta();
 
   setStatus('info','Automatisches Laden der <b>Artikelpreisliste.xlsx</b> (falls vorhanden).',2500);
   try{
