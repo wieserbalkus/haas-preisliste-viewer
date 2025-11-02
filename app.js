@@ -540,10 +540,18 @@ function updateVirtualRange(force){
   const container=VIRTUAL.container;
   if(!viewport || !container) return;
 
-  const scrollTop=viewport.scrollTop;
+  let scrollTop=viewport.scrollTop;
   const viewportHeight=viewport.clientHeight||1;
   const avg=Math.max(24, VIRTUAL.averageHeight||56);
+  const nearTop = scrollTop <= avg;
+  if(nearTop && scrollTop!==0){
+    viewport.scrollTop = 0;
+    scrollTop = 0;
+  }
   let start=Math.max(0, Math.floor(scrollTop/avg)-10);
+  if(nearTop){
+    start = 0;
+  }
   let end=Math.min(VIRTUAL.items.length, Math.ceil((scrollTop+viewportHeight)/avg)+10);
   if(!force && start===VIRTUAL.renderStart && end===VIRTUAL.renderEnd) return;
 
