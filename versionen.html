@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Haas Artikelpreisliste – Versionen</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="googlebot" content="noimageindex">
+
+<style>
+  :root{
+    --bg:#f7f7f5;
+    --card:#ffffff;
+    --ink:#111827;
+    --muted:#6b7280;
+    --row:#fbfbfb;
+    --head:#fff6e6;
+    --accent:#f59e0b;
+    --line:#e6e6e3;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+  a{color:var(--accent)}
+  .wrap{max-width:1100px;margin:28px auto;padding:0 16px}
+  .panel{background:var(--card);border-radius:12px;box-shadow:0 6px 22px rgba(0,0,0,.06);overflow:hidden}
+
+  .controls{
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    padding:16px;
+    border-bottom:1px solid var(--line);
+    background:#fff;
+  }
+  .controls-center{position:relative;height:64px;overflow:visible}
+  .brand img{
+    position:absolute;left:50%;top:50%;
+    transform:translate(-50%,-50%);
+    height:64px;display:block;
+  }
+
+  .section{padding:18px 16px 10px}
+  .section h1,
+  .section h2{
+    font-size:16px;margin:0 0 10px 0;background:var(--head);
+    padding:8px 10px;border-bottom:1px solid #d8dee6;
+  }
+  .section h1{font-size:20px}
+  .section p{margin:8px 0;color:#1f2937}
+  .timeline{list-style:none;margin:0;padding:0}
+  .timeline li{padding:10px 0;border-bottom:1px dashed var(--line)}
+  .timeline li:last-child{border-bottom:none}
+  .timeline strong{display:block;font-size:15px}
+  .timeline span{display:block;font-size:13px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel">
+
+    <div class="controls">
+      <div class="controls-center">
+        <div class="brand"><img src="./assets/img/Logo_Haas.jpg" alt="Haas Logo"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h1>Version &amp; Änderungsübersicht</h1>
+      <p>Hier findest du einen kompakten Überblick über die wichtigsten Veröffentlichungen der digitalen Artikelpreisliste.</p>
+    </div>
+
+    <div class="section">
+      <h2>Aktueller Stand</h2>
+      <ul class="timeline">
+        <li>
+          <strong>V1.0.0</strong>
+          <span>Offizieller Start der stabilen Version – 21.03.2024</span>
+          <p>Erste freigegebene Ausgabe der neuen Preisliste mit direkter Datenblatt-Auswahl, Statusmeldungen und optimierter Anzeige.</p>
+        </li>
+      </ul>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>
