@@ -535,8 +535,9 @@ function buildPrintDoc(){
 
     .page-footer{ position:fixed; left:0; right:0; bottom:0; padding:0 14mm 12mm; font-size:11px; color:#111; display:flex; justify-content:space-between; align-items:center; }
     .page-footer-right{ white-space:nowrap; font-variant-numeric:tabular-nums; }
+    .page-footer-right .page-num,
+    .page-footer-right .page-total{ display:inline-block; min-width:1.6em; text-align:right; }
     .page-footer-right .page-num::after{ content:counter(page); }
-    .page-footer-right .page-total::after{ content:counter(pages); }
   </style></head><body>
 
     <main>
@@ -578,8 +579,66 @@ function buildPrintDoc(){
 
     <footer class="page-footer" aria-hidden="true">
       <div>www.haas-fertigbau.at | Preise gemäß ${escapeHtml(PRICE_LIST)}</div>
-      <div class="page-footer-right">Seite <span class="page-num"></span> / <span class="page-total"></span></div>
+      <div class="page-footer-right">Seite <span class="page-num"></span> / <span class="page-total" data-total="–">–</span></div>
     </footer>
+
+    <script>
+      (function(){
+        const TOP_MARGIN_MM = 16;
+        const BOTTOM_MARGIN_MM = 32;
+        let pxPerMm = 0;
+
+        function ensurePxPerMm(){
+          if(pxPerMm) return pxPerMm;
+          const probe = document.createElement('div');
+          probe.style.cssText = 'position:absolute;visibility:hidden;height:1mm;width:0;padding:0;margin:0;border:0;';
+          document.body.appendChild(probe);
+          pxPerMm = probe.getBoundingClientRect().height || 0;
+          probe.remove();
+          return pxPerMm;
+        }
+
+        function computePageTotal(){
+          const main = document.querySelector('main');
+          const totalNode = document.querySelector('.page-total');
+          if(!main || !totalNode) return;
+
+          const scale = ensurePxPerMm();
+          if(!scale) return;
+
+          const printableHeight = Math.max((297 - (TOP_MARGIN_MM + BOTTOM_MARGIN_MM)) * scale, 1);
+          const contentHeight = main.scrollHeight;
+          if(!contentHeight || !Number.isFinite(contentHeight)) return;
+
+          const epsilon = scale * 0.5;
+          const pages = Math.max(1, Math.ceil((contentHeight + epsilon) / printableHeight));
+          const text = String(pages);
+          totalNode.textContent = text;
+          totalNode.setAttribute('data-total', text);
+        }
+
+        function scheduleCompute(){
+          computePageTotal();
+          setTimeout(computePageTotal, 120);
+        }
+
+        if(document.readyState === 'complete') scheduleCompute();
+        else window.addEventListener('load', scheduleCompute, {once:true});
+
+        if(document.fonts && document.fonts.ready){
+          document.fonts.ready.then(scheduleCompute).catch(()=>{});
+        }
+
+        window.addEventListener('beforeprint', scheduleCompute);
+
+        const mq = window.matchMedia ? window.matchMedia('print') : null;
+        if(mq){
+          const handler = (ev)=>{ if(ev.matches) scheduleCompute(); };
+          if(typeof mq.addEventListener === 'function') mq.addEventListener('change', handler);
+          else if(typeof mq.addListener === 'function') mq.addListener(handler);
+        }
+      })();
+    </script>
 
   </body></html>`;
 }
