@@ -22,6 +22,7 @@
         <!-- versteckter Datei-Input: nur Klick per Button -->
         <input id="file" type="file" accept=".xlsx,.xlsm" style="display:none" />
         <button id="reset" class="pill" title="Filter zurücksetzen">Zurücksetzen</button>
+        <small id="hint" class="statusline" data-status="info"></small>
       </div>
 
       <div class="controls-center">
@@ -39,7 +40,6 @@
         <!-- erscheint NUR wenn Autoload fehlschlägt -->
         <button id="manualBtn" class="pill" style="display:none" title="Datei manuell auswählen">Manuell auswählen…</button>
         <div class="status-version-row">
-          <small id="hint" class="statusline" data-status="info"></small>
           <a href="versionen.html" class="version-chip version-link" id="versionChip" title="" target="_blank" rel="noopener">
             <span>Programmversion</span>
             <span class="badge" id="versionBadge">–</span>
