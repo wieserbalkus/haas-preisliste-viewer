@@ -69,6 +69,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-ap
 .controls-right{
   justify-self:end;
   display:flex;flex-direction:column;align-items:flex-end;gap:6px;
+  width:100%;
 }
 
 /* Größeres Logo, ohne Schatten/Animation, in der Mitte vertikal ausgerichtet */
@@ -99,10 +100,27 @@ body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-ap
   white-space:nowrap;
 }
 
-.statusline{display:block;max-width:520px;text-align:right;font-size:12px;line-height:1.2;color:var(--muted);min-height:1.2em}
+.statusline{display:block;max-width:520px;text-align:left;font-size:12px;line-height:1.2;color:var(--muted);min-height:1.2em}
 .statusline[data-status="ok"]::before{content:"✓ ";font-weight:700}
 .statusline[data-status="info"]::before{content:"ℹ︎ ";font-weight:700}
 .statusline[data-status="warn"]::before{content:"⚠︎ ";font-weight:700}
+
+.status-version-row{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:12px;
+  width:100%;
+}
+
+.status-version-row .statusline{
+  flex:1 1 auto;
+}
+
+.version-link{
+  text-decoration:none;
+  color:inherit;
+}
 
 /* << NEU: Stil für den [Anleitung]-Link rechts oben */
 .help-link{

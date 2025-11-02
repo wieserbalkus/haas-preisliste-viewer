@@ -18,14 +18,11 @@
     <!-- ===== Steuerleiste (Titel oben, darunter Button; Logo Mitte) ===== -->
     <div class="controls" id="controls">
       <div class="controls-left">
-        <span class="inline-title">Haas Artikelpreisliste (Vertrieb)</span>
-        <div class="version-chip" id="versionChip" title="">
-          <span>Programmversion</span>
-          <span class="badge" id="versionBadge">–</span>
-        </div>
+        <span class="inline-title">Haas Artikelpreisliste</span>
         <!-- versteckter Datei-Input: nur Klick per Button -->
         <input id="file" type="file" accept=".xlsx,.xlsm" style="display:none" />
         <button id="reset" class="pill" title="Filter zurücksetzen">Zurücksetzen</button>
+        <small id="hint" class="statusline" data-status="info"></small>
       </div>
 
       <div class="controls-center">
@@ -42,7 +39,12 @@
         <select id="sheetSel" title="Blatt"></select>
         <!-- erscheint NUR wenn Autoload fehlschlägt -->
         <button id="manualBtn" class="pill" style="display:none" title="Datei manuell auswählen">Manuell auswählen…</button>
-        <small id="hint" class="statusline" data-status="info"></small>
+        <div class="status-version-row">
+          <a href="versionen.html" class="version-chip version-link" id="versionChip" title="" target="_blank" rel="noopener">
+            <span>Programmversion</span>
+            <span class="badge" id="versionBadge">–</span>
+          </a>
+        </div>
       </div>
     </div>
 
@@ -103,10 +105,6 @@
 
     <div id="toast" class="toast">Aktualisiert</div>
     <div id="printPortal" class="print-portal" aria-hidden="true"></div>
-    <div id="printFooter" class="print-footer" aria-hidden="true">
-      <span class="print-footer-left">Haas Preisliste · <span id="printVersion">–</span> · generiert: <span id="printTimestamp">–</span></span>
-      <span class="print-footer-right">Seite <span class="print-page" data-counter="page"></span> / <span class="print-pages" data-counter="pages"></span></span>
-    </div>
   </div>
 </div>
 
