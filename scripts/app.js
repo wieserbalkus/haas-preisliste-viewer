@@ -1,5 +1,5 @@
 /* ================= Basis-Einstellungen ================ */
-const APP_VERSION = 'v2.0.0';
+const APP_VERSION = 'V1.0.0';
 const APP_BUILD_DATE = '2024-06-05';
 const DEFAULT_FILE = 'Artikelpreisliste.xlsx';
 const DEFAULT_FILE_PATH = `./data/${DEFAULT_FILE}`;
@@ -880,20 +880,6 @@ function applyVersionInfo(){
   if(badge) badge.textContent=APP_VERSION;
   const chip=document.getElementById('versionChip');
   if(chip) chip.title=`Build: ${APP_BUILD_DATE} · Quelle: ${APP_BUILD_SOURCE}`;
-  const printVersion=document.getElementById('printVersion');
-  if(printVersion) printVersion.textContent=APP_VERSION;
-}
-
-function formatTimestamp(){
-  const now=new Date();
-  const date=now.toLocaleDateString('de-AT',{day:'2-digit',month:'2-digit',year:'numeric'});
-  const time=now.toLocaleTimeString('de-AT',{hour:'2-digit',minute:'2-digit'});
-  return `${date} ${time}`;
-}
-
-function refreshPrintFooterTimestamp(){
-  const ts=document.getElementById('printTimestamp');
-  if(ts) ts.textContent=formatTimestamp();
 }
 
 function printableText(text){
@@ -986,7 +972,6 @@ function triggerListPrint(mode){
     return;
   }
   document.body.dataset.printMode=mode;
-  refreshPrintFooterTimestamp();
   setStatus('info','Druckansicht (A4 quer) geöffnet…',2000);
   setTimeout(()=>window.print(),60);
 }
@@ -1057,13 +1042,6 @@ function buildPrintDoc(){
 
     .note{ margin-top:12px; font-size:11px; color:#374151; }
 
-    .page-footer{ position:running(summaryFooter); font-size:11px; color:#111; display:flex; justify-content:space-between; align-items:flex-end; padding:1.2mm 0 0.8mm; margin:0; width:100%; box-sizing:border-box; gap:16px; flex-wrap:wrap; }
-    .page-footer-left{ flex:1 1 auto; }
-    .page-footer-right{ white-space:nowrap; font-variant-numeric:tabular-nums; }
-    .page-footer-right .page-num,
-    .page-footer-right .page-total{ display:inline-block; min-width:1.6em; text-align:right; }
-    .page-footer-right .page-num::after{ content:counter(page, decimal); }
-    @media screen { .page-footer{ display:none; } }
   </style></head><body>
 
     <main>
@@ -1102,70 +1080,6 @@ function buildPrintDoc(){
       <br>Hinweis: Grundlage der Preise laut <b>${escapeHtml(SHEET)}</b>.
     </div>
     </main>
-
-    <footer class="page-footer" aria-hidden="true">
-      <div class="page-footer-left">www.haas-fertigbau.at · ${escapeHtml(APP_VERSION)} | Preise gemäß ${escapeHtml(PRICE_LIST)}</div>
-      <div class="page-footer-right">Seite <span class="page-num"></span> / <span class="page-total" data-total="–">–</span></div>
-    </footer>
-
-    <script>
-      (function(){
-        const TOP_MARGIN_MM = 10;
-        const BOTTOM_MARGIN_MM = 12;
-        const CONTENT_BOTTOM_BUFFER_MM = 12;
-        let pxPerMm = 0;
-
-        function ensurePxPerMm(){
-          if(pxPerMm) return pxPerMm;
-          const probe = document.createElement('div');
-          probe.style.cssText = 'position:absolute;visibility:hidden;height:1mm;width:0;padding:0;margin:0;border:0;';
-          document.body.appendChild(probe);
-          pxPerMm = probe.getBoundingClientRect().height || 0;
-          probe.remove();
-          return pxPerMm;
-        }
-
-        function computePageTotal(){
-          const main = document.querySelector('main');
-          const totalNode = document.querySelector('.page-total');
-          if(!main || !totalNode) return;
-
-          const scale = ensurePxPerMm();
-          if(!scale) return;
-
-          const printableHeight = Math.max(((297 - (TOP_MARGIN_MM + BOTTOM_MARGIN_MM)) * scale) - (CONTENT_BOTTOM_BUFFER_MM * scale), 1);
-          const contentHeight = main.scrollHeight;
-          if(!contentHeight || !Number.isFinite(contentHeight)) return;
-
-          const epsilon = scale * 0.5;
-          const pages = Math.max(1, Math.ceil((contentHeight + epsilon) / printableHeight));
-          const text = String(pages);
-          totalNode.textContent = text;
-          totalNode.setAttribute('data-total', text);
-        }
-
-        function scheduleCompute(){
-          computePageTotal();
-          setTimeout(computePageTotal, 120);
-        }
-
-        if(document.readyState === 'complete') scheduleCompute();
-        else window.addEventListener('load', scheduleCompute, {once:true});
-
-        if(document.fonts && document.fonts.ready){
-          document.fonts.ready.then(scheduleCompute).catch(()=>{});
-        }
-
-        window.addEventListener('beforeprint', scheduleCompute);
-
-        const mq = window.matchMedia ? window.matchMedia('print') : null;
-        if(mq){
-          const handler = (ev)=>{ if(ev.matches) scheduleCompute(); };
-          if(typeof mq.addEventListener === 'function') mq.addEventListener('change', handler);
-          else if(typeof mq.addListener === 'function') mq.addListener(handler);
-        }
-      })();
-    </script>
 
   </body></html>`;
 }
