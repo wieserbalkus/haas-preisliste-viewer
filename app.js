@@ -115,7 +115,9 @@ const VIRTUAL = {
   pending:false,
   lastFilter:null,
   boundScroll:false,
+  active:false,
 };
+const VIRTUAL_THRESHOLD = 1800;
 
 function ensureRowState(row){
   const key=row.id;
@@ -506,6 +508,7 @@ function clearVirtual(){
   VIRTUAL.heightCache=[];
   VIRTUAL.renderStart=0;
   VIRTUAL.renderEnd=0;
+  VIRTUAL.active=false;
 }
 function updateAverageHeight(index,height){
   if(!Number.isFinite(height) || height<=0) return;
@@ -534,7 +537,7 @@ function materializeRow(index){
   return node;
 }
 function updateVirtualRange(force){
-  if(!VIRTUAL.items.length){ return; }
+  if(!VIRTUAL.items.length || !VIRTUAL.active){ return; }
   ensureVirtualSetup();
   const viewport=VIRTUAL.viewport;
   const container=VIRTUAL.container;
@@ -637,6 +640,23 @@ function render(){
     return;
   }
 
+  const shouldVirtualize = items.length > VIRTUAL_THRESHOLD;
+
+  if(!shouldVirtualize){
+    clearVirtual();
+    if(body){
+      body.innerHTML='';
+      const frag=document.createDocumentFragment();
+      for(const item of items){
+        const node = item.type==='group' ? trGroup(item.group,f) : trChild(item.row,f);
+        if(node){ frag.appendChild(node); }
+      }
+      body.appendChild(frag);
+    }
+    VIRTUAL.items=[];
+    return;
+  }
+
   if(body){ body.innerHTML=''; }
   VIRTUAL.container=body;
   ensureVirtualSetup();
@@ -651,6 +671,7 @@ function render(){
   VIRTUAL.nodes.clear();
 
   VIRTUAL.items=items;
+  VIRTUAL.active=true;
   VIRTUAL.heightCache=new Array(items.length).fill(null);
   VIRTUAL.averageHeight=56;
   VIRTUAL.renderStart=0;
