@@ -1,9 +1,10 @@
 /* ================= Basis-Einstellungen ================ */
 const APP_VERSION = 'v2.0.0';
 const APP_BUILD_DATE = '2024-06-05';
-const APP_BUILD_SOURCE = 'Artikelpreisliste.xlsx';
 const DEFAULT_FILE = 'Artikelpreisliste.xlsx';
-const DEFAULT_FILE_URL = `${DEFAULT_FILE}?v=${APP_VERSION}`;
+const DEFAULT_FILE_PATH = `./data/${DEFAULT_FILE}`;
+const APP_BUILD_SOURCE = DEFAULT_FILE_PATH;
+const DEFAULT_FILE_URL = `${DEFAULT_FILE_PATH}?v=${APP_VERSION}`;
 const QTY_MAX      = 999.99;
 
 /* ================= Hilfsfunktionen ==================== */
@@ -1077,7 +1078,7 @@ function buildPrintDoc(){
         </div>
       </div>
       <div class="rightcol">
-        <img src="Logo_Haas.jpg" class="logo" alt="Logo" />
+        <img src="./assets/img/Logo_Haas.jpg" class="logo" alt="Logo" />
         <div class="created"><b>Erstellt am:</b> ${escapeHtml(DAT)}</div>
       </div>
     </div>
