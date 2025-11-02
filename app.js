@@ -46,10 +46,31 @@ function fmtQty(n){ return Number.isFinite(n)? n.toLocaleString('de-AT',{minimum
 /* ====== Hervorhebung (PDF-Style) + Linkify ====== */
 function escRe(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
 function splitTerms(s){ if(!s) return []; return String(s).trim().split(/\s+/).filter(Boolean); }
+const REGEX_CACHE_LIMIT = 200;
+const regexCache = new Map();
 function makeRegex(terms){
-  const t = [...new Set(terms.filter(Boolean))].sort((a,b)=>b.length-a.length);
-  if(!t.length) return null;
-  return new RegExp('(' + t.map(escRe).join('|') + ')','gi');
+  const normalized = Array.isArray(terms) ? terms.filter(Boolean) : [];
+  const key = normalized.slice().sort().join('\u0000');
+  if(!key){
+    regexCache.delete('');
+    return null;
+  }
+  if(regexCache.has(key)){
+    return regexCache.get(key);
+  }
+  const orderedTerms = [...new Set(normalized)].sort((a,b)=>b.length-a.length);
+  if(!orderedTerms.length){
+    regexCache.delete(key);
+    return null;
+  }
+  const rx = new RegExp('(' + orderedTerms.map(escRe).join('|') + ')','gi');
+  regexCache.set(key, rx);
+  while(regexCache.size > REGEX_CACHE_LIMIT){
+    const oldestKey = regexCache.keys().next().value;
+    if(oldestKey === undefined) break;
+    regexCache.delete(oldestKey);
+  }
+  return rx;
 }
 function hi(text, terms){
   const s = String(text ?? '');
