@@ -146,7 +146,10 @@
   .right{text-align:right}
   .empty{padding:24px;text-align:center;color:var(--muted)}
   .desc{white-space:pre-wrap;line-height:1.35em;word-break:break-word;overflow-wrap:anywhere}
-  .no-sort{cursor:default;}
+  .no-sort{
+    cursor:default;
+    user-select:text;
+  }
   .no-sort::after{display:none !important;content:none !important;}
   .qty{width:70px;text-align:right}
   .qty::placeholder{color:#bbb}
