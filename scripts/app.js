@@ -5,7 +5,6 @@ const DEFAULT_FILE = 'Artikelpreisliste.xlsx';
 const DEFAULT_FILE_PATH = `./data/${DEFAULT_FILE}`;
 const APP_BUILD_SOURCE = DEFAULT_FILE_PATH;
 const DEFAULT_FILE_URL = `${DEFAULT_FILE_PATH}?v=${APP_VERSION}`;
-const QTY_MAX      = 999.99;
 
 /* ================= Hilfsfunktionen ==================== */
 function $(q){return document.querySelector(q)}
@@ -39,9 +38,17 @@ function normalizeText(value){
   }
 }
 
-/* Menge parsing (±0–999,99) */
-const QTY_RE=/^-?\d{1,3}([.]\d{1,2})?$/;
-function parseQty(str){ if(str==null)return 0; let s=String(str).trim().replace(',', '.'); if(!s)return 0; if(!QTY_RE.test(s))return NaN; const n=Number(s); if(!Number.isFinite(n)||Math.abs(n)>QTY_MAX)return NaN; return n; }
+/* Menge parsing (beliebiger Betrag) */
+const QTY_RE=/^[-+]?(?:\d+(?:[.]\d*)?|[.]\d+)$/;
+function parseQty(str){
+  if(str==null) return 0;
+  let s = String(str).trim();
+  if(!s) return 0;
+  s = s.replace(',', '.');
+  if(!QTY_RE.test(s)) return NaN;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : NaN;
+}
 function fmtQty(n){ return Number.isFinite(n)? n.toLocaleString('de-AT',{minimumFractionDigits:0, maximumFractionDigits:2}) : ''; }
 
 /* ====== Hervorhebung (PDF-Style) + Linkify ====== */
@@ -300,7 +307,7 @@ function trChild(c, f){
   const qtyId=`q_${c.id}`, addBtnId=`add_${c.id}`;
   const qtyValue = state.qty || '';
   const qtyHTML = `<div class="qty-wrap">
-      <input id="${qtyId}" class="qty" type="text" inputmode="decimal" placeholder="0" maxlength="7" title="Menge (±0–999,99)" value="${escapeHtml(qtyValue)}" />
+      <input id="${qtyId}" class="qty" type="text" inputmode="decimal" placeholder="0" title="Menge" value="${escapeHtml(qtyValue)}" />
       <button id="${addBtnId}" type="button" class="addbtn" title="Zur Zusammenfassung hinzufügen">➕</button>
     </div>`;
 
