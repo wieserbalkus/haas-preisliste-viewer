@@ -171,6 +171,7 @@ tbody tr.group{ scroll-margin-top: 52px; }
 tbody td{padding:6px 8px;border-bottom:1px solid #eef0f3;vertical-align:top}
 tbody tr:nth-child(even):not(.group){background:var(--row)}
 .right{text-align:right}
+th.center,td.center{text-align:center}
 .empty{padding:24px;text-align:center;color:var(--muted)}
 .desc{white-space:pre-wrap;line-height:1.35em;word-break:break-word;overflow-wrap:anywhere}
 .no-sort{
@@ -182,6 +183,11 @@ tbody tr:nth-child(even):not(.group){background:var(--row)}
 .qty::placeholder{color:#bbb}
 
 .qty-wrap{display:flex;align-items:center;gap:6px}
+.action-cell{text-align:center}
+.action-wrap{display:flex;align-items:center;justify-content:flex-end;gap:8px}
+.alt-flag,.alt-flag-basket{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);cursor:pointer}
+.alt-flag input,.alt-flag-basket input{width:16px;height:16px;accent-color:var(--accent)}
+.alt-flag span,.alt-flag-basket span{line-height:1}
 .btn-plus{min-width:28px;height:28px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;line-height:1;display:inline-flex;align-items:center;justify-content:center;padding:0 10px;gap:4px;font-size:.875rem;white-space:nowrap;transition:background-color .2s ease,color .2s ease,border-color .2s ease}
 .btn-plus:hover{background:#fff9f0;border-color:#f59e0b}
 .btn-plus.added{background:#f59e0b;color:#fff;border-color:#f59e0b}
@@ -215,6 +221,15 @@ tbody tr:nth-child(even):not(.group){background:var(--row)}
 .summary th,.summary td{padding:6px 8px;border-bottom:1px dashed #eee}
 .summary th.center{text-align:center}
 .summary .tot{font-weight:700}
+.summary td.alt-cell{text-align:center}
+.summary td.alt-cell .alt-flag-basket{justify-content:center}
+.summary tr.alt-item td{font-style:italic;opacity:.92}
+.summary tr.alt-item input,.summary tr.alt-item textarea,.summary tr.alt-item .qty-editor,.summary tr.alt-item .qty-editor input,.summary tr.alt-item .price-editor,.summary tr.alt-item .price-editor input,.summary tr.alt-item .unit-input,.summary tr.alt-item .qty-unit{font-style:normal;opacity:1}
+.summary tr.alt-item .manual-editor,.summary tr.alt-item .manual-editor input,.summary tr.alt-item .manual-editor textarea{font-style:normal}
+.summary td.alt-total{font-style:italic;opacity:.85}
+.summary tfoot .total-main .total-cell{font-weight:700}
+.summary tfoot .total-alt .total-cell{font-style:italic;opacity:.85}
+.summary #sum-alt{font-style:italic}
 .summary .qty-editor{display:flex;align-items:center;justify-content:flex-end;gap:6px}
 .summary .qty-input{width:90px;text-align:right;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;background:#fff;font:inherit;color:inherit}
 .summary .qty-input:focus{outline:2px solid #f59e0b22;border-color:#f59e0b}

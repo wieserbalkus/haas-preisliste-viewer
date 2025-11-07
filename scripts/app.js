@@ -155,6 +155,7 @@ function cloneBasketItem(payload, options={}){
     eh: payload.eh ?? '',
     preisNum: Number.isFinite(preisRaw) ? preisRaw : 0,
     qtyNum: qtyRaw,
+    isAlternative: !!payload.isAlternative,
   };
   item.totalNum = item.preisNum * item.qtyNum;
   return item;
@@ -178,7 +179,14 @@ function createManualBasketItem(){
     qtyNum: 0,
     totalNum: 0,
     isManual: true,
+    isAlternative: false,
   };
+}
+
+function displayArtnr(item){
+  if(!item) return '';
+  const id = item.id ?? '';
+  return item.isAlternative ? `A-${id}` : id;
 }
 
 function addManualTopItem(){
@@ -238,6 +246,31 @@ function removeLine(lineId){
 
 function findBasketItem(lineId){
   return BASKET_STATE.items.find(item=>item.lineId===lineId);
+}
+
+function setAltFlag(lineId, checked){
+  const item = findBasketItem(lineId);
+  if(!item) return;
+  const next = !!checked;
+  if(item.isAlternative === next) return;
+  item.isAlternative = next;
+  const wrap = $('#summaryTableWrap');
+  if(wrap){
+    const safeId = (typeof CSS!=='undefined' && CSS && typeof CSS.escape==='function') ? CSS.escape(lineId) : lineId.replace(/"/g,'\\"');
+    const row = wrap.querySelector(`[data-line-id="${safeId}"]`);
+    if(row){
+      row.dataset.alt = next ? 'true' : 'false';
+      row.classList.toggle('alt-item', next);
+      const artCell = row.querySelector('[data-role="artnr"]');
+      if(artCell){ artCell.textContent = displayArtnr(item); }
+      const totalCell = row.querySelector('[data-role="line-total"]');
+      if(totalCell){ updateLineTotalCell(totalCell, getLineTotalValue(item), next); }
+    }
+    const toggle = wrap.querySelector(`input.alt-toggle-basket[data-line-id="${safeId}"]`);
+    if(toggle){ toggle.checked = next; }
+  }
+  const sums = computeBasketSums();
+  updateSummaryDisplay(sums, BASKET_STATE.items.length, true);
 }
 
 function clearBasket(){
@@ -396,7 +429,7 @@ function trGroup(g, f){
   tr.className='group';
   tr.id = 'grp_'+g.groupId;
   const title = f && f.rawQ ? hlAndLink(g.title||'', f.terms) : escapeHtml(g.title||'');
-  tr.innerHTML=`<td colspan="9"><strong>${escapeHtml(g.groupId)} – ${title}</strong></td>`;
+  tr.innerHTML=`<td colspan="10"><strong>${escapeHtml(g.groupId)} – ${title}</strong></td>`;
   return tr;
 }
 
@@ -455,6 +488,12 @@ function trChild(c, f){
   const qtyValue = state.qty || '';
   const qtyHTML = `<div class="qty-wrap">
       <input id="${qtyId}" class="qty" type="text" inputmode="decimal" placeholder="0" title="Menge" value="${escapeHtml(qtyValue)}" />
+    </div>`;
+  const actionHTML = `<div class="action-wrap">
+      <label class="alt-flag" title="Als Alternative markieren">
+        <input type="checkbox" class="alt-toggle" />
+        <span>Alt.</span>
+      </label>
       <button id="${addBtnId}" type="button" class="btn-plus" title="Zur Zusammenfassung hinzufügen">➕</button>
     </div>`;
 
@@ -466,6 +505,7 @@ function trChild(c, f){
     <td>${ehInfoHTML}</td>
     <td class="right" data-sort="${preisNum}">${preisHTML}</td>
     <td>${qtyHTML}</td>
+    <td class="center action-cell">${actionHTML}</td>
     <td class="right" data-total="0">–</td>
     <td class="desc">${hinweisHTML}</td>`;
 
@@ -483,6 +523,7 @@ function trChild(c, f){
   const preisInp=tr.querySelector('input[data-field="preis"]');
   const totalCell=tr.querySelector('[data-total]');
   const addBtn=tr.querySelector('.btn-plus');
+  const altToggle=tr.querySelector('.alt-toggle');
   let addFeedbackTimer=null;
   let pendingAddReset=null;
 
@@ -512,14 +553,18 @@ function trChild(c, f){
     addBtn.classList.add('added');
     addBtn.textContent='✓';
     const resetToken=Symbol('added-feedback');
-    pendingAddReset={token:resetToken, userChanged:false};
+    pendingAddReset={token:resetToken, qtyChanged:false, altChanged:false};
     addFeedbackTimer=setTimeout(()=>{
       if(pendingAddReset && pendingAddReset.token===resetToken){
-        if(!pendingAddReset.userChanged && qtyInp){
+        if(!pendingAddReset.qtyChanged && qtyInp){
           qtyInp.value='';
           qtyInp.placeholder='0';
           state.qty='';
           recalcRowTotal();
+        }
+        if(!pendingAddReset.altChanged && altToggle){
+          altToggle.checked=false;
+          altToggle.indeterminate=false;
         }
         pendingAddReset=null;
       }
@@ -566,6 +611,7 @@ function trChild(c, f){
       eh:currentEH(),
       preisNum:p,
       qtyNum:q,
+      isAlternative: !!altToggle?.checked,
     };
   }
 
@@ -581,14 +627,20 @@ function trChild(c, f){
     qtyInp.value=qtyInp.value.replace(/[^\d.,-]/g,'').replace(/(?!^)-/g,'');
     state.qty=qtyInp.value;
     if(pendingAddReset){
-      pendingAddReset.userChanged=true;
+      pendingAddReset.qtyChanged=true;
     }
     recalcRowTotal();
   });
 
   qtyInp?.addEventListener('change',()=>{
     if(pendingAddReset){
-      pendingAddReset.userChanged=true;
+      pendingAddReset.qtyChanged=true;
+    }
+  });
+
+  altToggle?.addEventListener('change',()=>{
+    if(pendingAddReset){
+      pendingAddReset.altChanged=true;
     }
   });
 
@@ -672,7 +724,7 @@ function createSpacer(){
   const tr=document.createElement('tr');
   tr.className='virtual-spacer';
   tr.setAttribute('aria-hidden','true');
-  tr.innerHTML='<td colspan="9" style="padding:0;border:none;height:0;border:none"></td>';
+  tr.innerHTML='<td colspan="10" style="padding:0;border:none;height:0;border:none"></td>';
   return tr;
 }
 function setSpacerHeight(spacer,height){
@@ -834,7 +886,7 @@ function render(){
   if(!items.length){
     clearVirtual();
     if(body){
-      body.innerHTML='<tr class="empty"><td colspan="9">Keine Positionen gefunden.</td></tr>';
+      body.innerHTML='<tr class="empty"><td colspan="10">Keine Positionen gefunden.</td></tr>';
     }
     VIRTUAL.items=[];
     return;
@@ -1048,8 +1100,21 @@ function getLineTotalValue(item){
   return 0;
 }
 
+function computeBasketSums(){
+  let sumMain = 0;
+  let sumAlt = 0;
+  for(const item of BASKET_STATE.items){
+    const total = getLineTotalValue(item);
+    if(!Number.isFinite(total)){ continue; }
+    if(item?.isAlternative){ sumAlt += total; }
+    else{ sumMain += total; }
+  }
+  return { main: sumMain, alt: sumAlt, total: sumMain + sumAlt };
+}
+
 function computeBasketSum(){
-  return BASKET_STATE.items.reduce((acc,it)=>acc + getLineTotalValue(it),0);
+  const sums = computeBasketSums();
+  return sums.total;
 }
 
 function formatQtyInputValue(qty){
@@ -1060,33 +1125,57 @@ function formatPriceInputValue(price){
   return Number.isFinite(price) ? String(price) : '';
 }
 
-function updateLineTotalCell(cell, totalNum){
-  if(!cell) return;
-  if(!Number.isFinite(totalNum) || totalNum === 0){
-    if(Number.isFinite(totalNum) && totalNum === 0){
-      cell.textContent = fmtPrice(totalNum);
-    }else{
-      cell.textContent = '–';
+function formatLineTotalDisplay(totalNum, isAlternative){
+  let text = '–';
+  let dataset = '0';
+  let isNegative = false;
+  if(Number.isFinite(totalNum)){
+    text = fmtPrice(totalNum);
+    dataset = String(totalNum);
+    isNegative = totalNum < 0;
+    if(totalNum === 0){
+      text = fmtPrice(0);
     }
-    cell.classList.remove('neg');
-    cell.dataset.total = '0';
-    return;
   }
-  cell.textContent = fmtPrice(totalNum);
-  cell.classList.toggle('neg', totalNum<0);
-  cell.dataset.total = String(totalNum);
+  if(isAlternative){
+    text = `(${text})`;
+  }
+  return { text, dataset, isNegative, isAlternative: !!isAlternative };
 }
 
-function updateSummaryDisplay(sum, count, sumCell, commitDelta){
-  if(sumCell){
-    sumCell.textContent = fmtPrice(sum);
-    sumCell.classList.toggle('neg', sum<0);
-    sumCell.dataset.sum = String(sum);
-  }
+function updateLineTotalCell(cell, totalNum, isAlternative){
+  if(!cell) return;
+  const { text, dataset, isNegative, isAlternative: alt } = formatLineTotalDisplay(totalNum, isAlternative);
+  cell.textContent = text;
+  cell.dataset.total = dataset;
+  cell.classList.toggle('neg', isNegative);
+  cell.classList.toggle('alt-total', alt);
+}
+
+function updateSummaryDisplay(sums, count, commitDelta){
+  const total = sums?.total ?? 0;
+  const sumMain = sums?.main ?? 0;
+  const sumAlt = sums?.alt ?? 0;
   $('#selCount').textContent = String(count);
-  $('#selSum').textContent = sum.toLocaleString('de-AT',{style:'currency',currency:'EUR'});
+  const selSumEl = $('#selSum');
+  if(selSumEl){
+    selSumEl.textContent = total.toLocaleString('de-AT',{style:'currency',currency:'EUR'});
+  }
+  const sumMainEl = document.getElementById('sum-main');
+  if(sumMainEl){
+    sumMainEl.textContent = fmtPrice(sumMain);
+    sumMainEl.dataset.sum = String(sumMain);
+    sumMainEl.classList.toggle('neg', sumMain<0);
+  }
+  const sumAltEl = document.getElementById('sum-alt');
+  if(sumAltEl){
+    const altText = fmtPrice(sumAlt);
+    sumAltEl.textContent = `(${altText})`;
+    sumAltEl.dataset.sum = String(sumAlt);
+    sumAltEl.classList.toggle('neg', sumAlt<0);
+  }
   if(commitDelta){
-    updateDelta(sum);
+    updateDelta(total);
   }
 }
 
@@ -1116,16 +1205,23 @@ function renderSummary(feedback, options={}){
   if(!wrap) return;
   const items=getDisplayOrderedItems();
 
-  let sum=0;
+  let sumMain=0;
+  let sumAlt=0;
   const rows=items.map(it=>{
     const totalNum = getLineTotalValue(it);
-    if(Number.isFinite(totalNum)) sum+=totalNum;
     const isManual = !!it.isManual;
+    const isAlternative = !!it.isAlternative;
+    if(Number.isFinite(totalNum)){
+      if(isAlternative){ sumAlt += totalNum; }
+      else{ sumMain += totalNum; }
+    }
     const kurzHTML = linkify(escapeHtml(it.kurz||''));
     const beschrHTML = linkify(escapeHtml(it.beschreibung||''));
     const qtyVal = formatQtyInputValue(it.qtyNum);
-    const totalClass = Number.isFinite(totalNum) && totalNum<0 ? ' neg' : '';
-    const totalText = Number.isFinite(totalNum) ? fmtPrice(totalNum) : '–';
+    const totalInfo = formatLineTotalDisplay(totalNum, isAlternative);
+    const totalClasses = ['right'];
+    if(totalInfo.isNegative){ totalClasses.push('neg'); }
+    if(isAlternative){ totalClasses.push('alt-total'); }
     const manualEditor = isManual
       ? `<div class="manual-editor">
           <input type="text" class="manual-title" data-line-id="${escapeHtml(it.lineId)}" data-field="title" value="${escapeHtml(it.kurz||'')}" placeholder="${escapeHtml(MANUAL_DEFAULT_TITLE)}" />
@@ -1140,33 +1236,44 @@ function renderSummary(feedback, options={}){
     const unitEditor = isManual
       ? `<input type="text" class="unit-input" data-line-id="${escapeHtml(it.lineId)}" data-field="unit" placeholder="Einheit" value="${escapeHtml(it.eh||'')}" />`
       : `<span class="qty-unit" data-role="qty-unit">${escapeHtml(it.eh||'')}</span>`;
-    return `<tr data-line-id="${escapeHtml(it.lineId)}" data-manual="${isManual?'true':'false'}" data-price="${Number.isFinite(it.preisNum)?String(it.preisNum):'0'}">
-      <td style="width:120px">${escapeHtml(it.id)}</td>
+    const rowClasses = ['basket-row'];
+    if(isManual){ rowClasses.push('manual-row'); }
+    if(isAlternative){ rowClasses.push('alt-item'); }
+    const altToggle = `<label class="alt-flag alt-flag-basket" title="Als Alternative markieren">
+        <input type="checkbox" class="alt-toggle-basket" data-line-id="${escapeHtml(it.lineId)}" ${isAlternative?'checked':''} aria-label="Alternativposition" />
+        <span>Alt.</span>
+      </label>`;
+    return `<tr class="${rowClasses.join(' ')}" data-line-id="${escapeHtml(it.lineId)}" data-manual="${isManual?'true':'false'}" data-alt="${isAlternative?'true':'false'}" data-price="${Number.isFinite(it.preisNum)?String(it.preisNum):'0'}">
+      <td style="width:120px" data-role="artnr">${escapeHtml(displayArtnr(it))}</td>
+      <td class="center alt-cell">${altToggle}</td>
       <td style="min-width:220px">${manualEditor}</td>
-      <td class="right" style="width:120px">${priceContent}</td>
+      <td class="right" style="width:120px" data-role="price-cell">${priceContent}</td>
       <td class="right" style="width:140px">
         <div class="qty-editor">
           <input type="number" step="0.01" inputmode="decimal" class="qty-input" data-line-id="${escapeHtml(it.lineId)}" data-field="qty" value="${escapeHtml(qtyVal)}" />
           ${unitEditor}
         </div>
       </td>
-      <td class="right${totalClass}" data-role="line-total" data-line-id="${escapeHtml(it.lineId)}" data-total="${Number.isFinite(totalNum)?String(totalNum):'0'}">${totalText}</td>
+      <td class="${totalClasses.join(' ')}" data-role="line-total" data-line-id="${escapeHtml(it.lineId)}" data-total="${Number.isFinite(totalNum)?String(totalNum):'0'}">${totalInfo.text}</td>
       <td class="action" style="width:48px">
         <button type="button" class="remove-line" data-line-id="${escapeHtml(it.lineId)}" title="Position entfernen" aria-label="Position entfernen">✖</button>
       </td>
     </tr>`;
   }).join('');
 
-  const bodyHTML = rows || '<tr class="empty"><td colspan="6" class="muted">Keine Positionen markiert.</td></tr>';
+  const bodyHTML = rows || '<tr class="empty"><td colspan="7" class="muted">Keine Positionen markiert.</td></tr>';
+  const sums = { main: sumMain, alt: sumAlt, total: sumMain + sumAlt };
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>Art.Nr.</th><th>Bezeichnung (Kurztext + Beschreibung)</th><th class="right">EH-Preis</th><th class="right">Menge</th><th class="right">Gesamt</th><th class="center">&nbsp;</th></tr></thead>
+      <thead><tr><th>Art.Nr.</th><th class="center">Alt.</th><th>Bezeichnung (Kurztext + Beschreibung)</th><th class="right">EH-Preis</th><th class="right">Menge</th><th class="right">Gesamt</th><th class="center">&nbsp;</th></tr></thead>
       <tbody>${bodyHTML}</tbody>
-      <tfoot><tr class="tot"><td colspan="5" class="right">Summe</td><td class="right" data-role="summary-total" data-sum="${String(sum)}">${fmtPrice(sum)}</td></tr></tfoot>
+      <tfoot>
+        <tr class="tot total-main"><td colspan="5" class="right">Gesamtsumme</td><td class="right total-cell" id="sum-main" data-sum="${String(sumMain)}">${fmtPrice(sumMain)}</td><td></td></tr>
+        <tr class="tot total-alt"><td colspan="5" class="right"><em>Gesamtsumme Alternativpositionen</em></td><td class="right total-cell alt-total-cell" id="sum-alt" data-sum="${String(sumAlt)}">(${fmtPrice(sumAlt)})</td><td></td></tr>
+      </tfoot>
     </table>`;
 
-  const sumCell = wrap.querySelector('[data-role="summary-total"]');
-  updateSummaryDisplay(sum, items.length, sumCell, !!feedback);
+  updateSummaryDisplay(sums, items.length, !!feedback);
 
   attachSummaryInteractions(wrap);
 
@@ -1178,7 +1285,6 @@ function renderSummary(feedback, options={}){
 }
 
 function attachSummaryInteractions(wrap){
-  const sumCell = wrap.querySelector('[data-role="summary-total"]');
   const qtyInputs = wrap.querySelectorAll('input.qty-input');
   const priceInputs = wrap.querySelectorAll('input.price-input');
   const titleInputs = wrap.querySelectorAll('input.manual-title');
@@ -1186,8 +1292,8 @@ function attachSummaryInteractions(wrap){
   const unitInputs = wrap.querySelectorAll('input.unit-input');
 
   const recomputeAndDisplay = (commit=false)=>{
-    const sum = computeBasketSum();
-    updateSummaryDisplay(sum, BASKET_STATE.items.length, sumCell, commit);
+    const sums = computeBasketSums();
+    updateSummaryDisplay(sums, BASKET_STATE.items.length, commit);
   };
 
   const setRowInvalid = (row, key, invalid)=>{
@@ -1232,17 +1338,25 @@ function attachSummaryInteractions(wrap){
       setInputInvalid(inp,false);
 
       if(preview.status === 'preview' && preview.item){
-        updateLineTotalCell(totalCell, preview.item.totalNum);
-        const previewSum = computeBasketSum() - baseTotal + getLineTotalValue(preview.item);
-        updateSummaryDisplay(previewSum, BASKET_STATE.items.length, sumCell, false);
+        updateLineTotalCell(totalCell, preview.item.totalNum, preview.item.isAlternative);
+        const previewSums = computeBasketSums();
+        const previewTotal = getLineTotalValue(preview.item);
+        const delta = previewTotal - baseTotal;
+        if(existing?.isAlternative){ previewSums.alt += delta; }
+        else{ previewSums.main += delta; }
+        previewSums.total = previewSums.main + previewSums.alt;
+        updateSummaryDisplay(previewSums, BASKET_STATE.items.length, false);
       }
       else if(preview.status === 'empty'){
-        updateLineTotalCell(totalCell, NaN);
-        const previewSum = computeBasketSum() - baseTotal;
-        updateSummaryDisplay(previewSum, BASKET_STATE.items.length, sumCell, false);
+        updateLineTotalCell(totalCell, NaN, existing?.isAlternative);
+        const previewSums = computeBasketSums();
+        if(existing?.isAlternative){ previewSums.alt -= baseTotal; }
+        else{ previewSums.main -= baseTotal; }
+        previewSums.total = previewSums.main + previewSums.alt;
+        updateSummaryDisplay(previewSums, BASKET_STATE.items.length, false);
       }
       else{
-        updateLineTotalCell(totalCell, baseTotal);
+        updateLineTotalCell(totalCell, baseTotal, existing?.isAlternative);
         recomputeAndDisplay(false);
       }
     });
@@ -1268,7 +1382,7 @@ function attachSummaryInteractions(wrap){
         setInputInvalid(inp,true);
         if(before){
           inp.value = formatQtyInputValue(before.qtyNum);
-          updateLineTotalCell(totalCell, getLineTotalValue(before));
+          updateLineTotalCell(totalCell, getLineTotalValue(before), before.isAlternative);
         }
         setStatus('warn','Ungültige Menge.',2500);
         recomputeAndDisplay(false);
@@ -1280,16 +1394,17 @@ function attachSummaryInteractions(wrap){
 
       if(result.status === 'updated' && result.item){
         inp.value = formatQtyInputValue(result.item.qtyNum);
-        updateLineTotalCell(totalCell, result.item.totalNum);
+        updateLineTotalCell(totalCell, result.item.totalNum, result.item.isAlternative);
         recomputeAndDisplay(true);
       }
       else if(result.status === 'empty' && before){
         inp.value = formatQtyInputValue(before.qtyNum);
-        updateLineTotalCell(totalCell, getLineTotalValue(before));
+        updateLineTotalCell(totalCell, getLineTotalValue(before), before.isAlternative);
         recomputeAndDisplay(false);
       }
       else{
-        updateLineTotalCell(totalCell, getLineTotalValue(findBasketItem(lineId)));
+        const fresh = findBasketItem(lineId);
+        updateLineTotalCell(totalCell, getLineTotalValue(fresh), fresh?.isAlternative);
         recomputeAndDisplay(false);
       }
     });
@@ -1321,9 +1436,13 @@ function attachSummaryInteractions(wrap){
       setInputInvalid(inp,false);
       const qty = Number.isFinite(existing.qtyNum) ? existing.qtyNum : 0;
       const previewTotal = qty * previewPrice;
-      updateLineTotalCell(totalCell, previewTotal);
-      const previewSum = computeBasketSum() - baseTotal + previewTotal;
-      updateSummaryDisplay(previewSum, BASKET_STATE.items.length, sumCell, false);
+      updateLineTotalCell(totalCell, previewTotal, existing?.isAlternative);
+      const previewSums = computeBasketSums();
+      const delta = previewTotal - baseTotal;
+      if(existing?.isAlternative){ previewSums.alt += delta; }
+      else{ previewSums.main += delta; }
+      previewSums.total = previewSums.main + previewSums.alt;
+      updateSummaryDisplay(previewSums, BASKET_STATE.items.length, false);
     });
 
     inp.addEventListener('change',()=>{
@@ -1339,7 +1458,7 @@ function attachSummaryInteractions(wrap){
           setRowInvalid(row,'priceInvalid',true);
           setInputInvalid(inp,true);
           inp.value = formatPriceInputValue(existing.preisNum);
-          updateLineTotalCell(totalCell, getLineTotalValue(existing));
+          updateLineTotalCell(totalCell, getLineTotalValue(existing), existing.isAlternative);
           setStatus('warn','Ungültiger Preis.',2500);
           recomputeAndDisplay(false);
           return;
@@ -1350,7 +1469,7 @@ function attachSummaryInteractions(wrap){
       const qty = Number.isFinite(existing.qtyNum) ? existing.qtyNum : 0;
       existing.totalNum = qty * newPrice;
       inp.value = formatPriceInputValue(existing.preisNum);
-      updateLineTotalCell(totalCell, existing.totalNum);
+      updateLineTotalCell(totalCell, existing.totalNum, existing.isAlternative);
       setRowInvalid(row,'priceInvalid',false);
       setInputInvalid(inp,false);
       recomputeAndDisplay(true);
@@ -1383,6 +1502,15 @@ function attachSummaryInteractions(wrap){
     inp.addEventListener('input',()=>{
       const existing = findBasketItem(lineId);
       if(existing){ existing.eh = inp.value; }
+    });
+  });
+
+  const altToggles = wrap.querySelectorAll('input.alt-toggle-basket');
+  altToggles.forEach(toggle=>{
+    toggle.addEventListener('change',()=>{
+      const lineId = toggle.dataset.lineId;
+      if(!lineId) return;
+      setAltFlag(lineId, toggle.checked);
     });
   });
 
@@ -1512,20 +1640,24 @@ function buildPrintDoc(){
   const BETR=($('#betreffInput')?.value||'').trim()||'–';
   const DAT=new Date().toLocaleDateString('de-AT');
   const SHEET = CURRENT_SHEET || '–';
-  const PRICE_LIST = getCurrentPriceListLabel();
 
-  let tbody=''; let total=0;
+  let tbody=''; let sumMain=0; let sumAlt=0;
   items.forEach(it=>{
     const lineTotal=Number.isFinite(it.totalNum)?it.totalNum:0;
-    total+=lineTotal;
+    if(it.isAlternative){ sumAlt+=lineTotal; } else { sumMain+=lineTotal; }
     const kurzHTML = linkify(escapeHtml(it.kurz||''));
     const beschrHTML = linkify(escapeHtml(it.beschreibung||''));
-    tbody+=`<tr class="item-row">
-      <td>${escapeHtml(it.id)}</td>
+    const rowClasses=['item-row'];
+    if(it.isAlternative){ rowClasses.push('alt-item'); }
+    const totalInfo = formatLineTotalDisplay(lineTotal, !!it.isAlternative);
+    const unitText = escapeHtml(it.eh||'');
+    const qtyText = fmtQty(it.qtyNum);
+    tbody+=`<tr class="${rowClasses.join(' ')}">
+      <td>${escapeHtml(displayArtnr(it))}</td>
       <td><div><b>${kurzHTML}</b></div><div class="desc">${beschrHTML}</div></td>
       <td class="right">${fmtPrice(it.preisNum)}</td>
-      <td class="right">${fmtQty(it.qtyNum)} ${escapeHtml(it.eh)}</td>
-      <td class="right${lineTotal<0?' neg':''}">${fmtPrice(lineTotal)}</td>
+      <td class="right">${qtyText} ${unitText}</td>
+      <td class="right${totalInfo.isNegative?' neg':''}">${totalInfo.text}</td>
     </tr>`;
   });
 
@@ -1557,12 +1689,18 @@ function buildPrintDoc(){
     td, th{ page-break-inside: avoid; }
     .right{ text-align:right; }
     .neg{ color:#b91c1c; font-weight:600; }
+    tr.alt-item td{ font-style:italic; }
+    tr.alt-item td .desc{ font-style:normal; }
+    tr.alt-item td .desc b{ font-style:italic; }
     .desc{ white-space:pre-wrap; }
     .desc a{ text-decoration:underline; word-break:break-all; }
 
-    .grand-total{ page-break-inside: avoid; margin-top:10px; border-top:2px solid #bbb; display:grid; grid-template-columns:1fr 140px; gap:8px; align-items:center; font-weight:700; }
+    .grand-totals{ page-break-inside: avoid; margin-top:10px; border-top:2px solid #bbb; padding-top:8px; display:grid; gap:6px; }
+    .grand-total{ display:grid; grid-template-columns:1fr 140px; gap:8px; align-items:center; font-weight:700; }
     .grand-total .label{ text-align:right; padding-right:8px; }
     .grand-total .value{ text-align:right; }
+    .grand-total.alt{ font-style:italic; font-weight:600; opacity:.9; }
+    .grand-total.alt .value{ font-style:italic; }
 
     .note{ margin-top:12px; font-size:11px; color:#374151; }
 
@@ -1596,7 +1734,10 @@ function buildPrintDoc(){
       <tbody>${tbody}</tbody>
     </table>
 
-    <div class="grand-total"><div class="label">Gesamtsumme</div><div class="value${total<0?' neg':''}">${(total).toLocaleString('de-AT',{style:'currency',currency:'EUR'})}</div></div>
+    <div class="grand-totals">
+      <div class="grand-total"><div class="label">Gesamtsumme</div><div class="value${sumMain<0?' neg':''}">${sumMain.toLocaleString('de-AT',{style:'currency',currency:'EUR'})}</div></div>
+      <div class="grand-total alt"><div class="label"><em>Gesamtsumme Alternativpositionen</em></div><div class="value${sumAlt<0?' neg':''}">(${fmtPrice(sumAlt)})</div></div>
+    </div>
 
     <div class="note">
       Der Preis versteht sich inkl. 20% MwSt.
