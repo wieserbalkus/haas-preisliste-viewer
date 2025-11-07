@@ -127,9 +127,100 @@ function hlAndLink(text, terms){
 let GROUPS=[], LAST_WB=null;
 let DRAWER_OPEN = false;
 let CURRENT_SHEET = '';
-const SELECTED = new Map();
+const BASKET_STATE = {
+  items: [],
+  mergeSameItems: true,
+};
 let GROUP_SWITCH_ANIM = Promise.resolve();
 const ROW_STATES = new Map();
+let BASKET_LINE_COUNTER = 1;
+
+function nextLineId(){
+  return `ln_${BASKET_LINE_COUNTER++}`;
+}
+
+function cloneBasketItem(payload){
+  if(!payload || !payload.id){ return null; }
+  const qtyRaw = Number.isFinite(payload.qtyNum) ? payload.qtyNum : parseQty(payload.qtyNum);
+  if(!Number.isFinite(qtyRaw) || qtyRaw === 0){ return null; }
+  const preisRaw = Number.isFinite(payload.preisNum) ? payload.preisNum : parseEuro(payload.preisNum);
+  const item = {
+    lineId: payload.lineId || nextLineId(),
+    id: payload.id,
+    kurz: payload.kurz ?? '',
+    beschreibung: payload.beschreibung ?? '',
+    eh: payload.eh ?? '',
+    preisNum: Number.isFinite(preisRaw) ? preisRaw : 0,
+    qtyNum: qtyRaw,
+  };
+  item.totalNum = item.preisNum * item.qtyNum;
+  return item;
+}
+
+function addToBasket(payload){
+  const item = cloneBasketItem(payload);
+  if(!item){ return null; }
+  if(BASKET_STATE.mergeSameItems){
+    const idx = BASKET_STATE.items.findIndex(existing=>existing.id===item.id);
+    if(idx>=0){
+      const existing = BASKET_STATE.items[idx];
+      const mergedQty = existing.qtyNum + item.qtyNum;
+      if(mergedQty === 0){
+        BASKET_STATE.items.splice(idx,1);
+        return {...existing, qtyNum:0, totalNum:0, removed:true};
+      }
+      const merged = {
+        ...existing,
+        ...item,
+        lineId: existing.lineId,
+        qtyNum: mergedQty,
+      };
+      merged.totalNum = merged.preisNum * merged.qtyNum;
+      BASKET_STATE.items[idx] = merged;
+      return merged;
+    }
+  }
+  BASKET_STATE.items.push(item);
+  return item;
+}
+
+function updateLineQty(lineId, qtyValue){
+  const idx = BASKET_STATE.items.findIndex(item=>item.lineId===lineId);
+  if(idx<0) return null;
+  const qtyNum = Number.isFinite(qtyValue) ? qtyValue : parseQty(qtyValue);
+  if(!Number.isFinite(qtyNum) || qtyNum === 0){
+    BASKET_STATE.items.splice(idx,1);
+    return null;
+  }
+  const item = {...BASKET_STATE.items[idx], qtyNum};
+  item.totalNum = item.preisNum * item.qtyNum;
+  BASKET_STATE.items[idx] = item;
+  return item;
+}
+
+function removeLine(lineId){
+  const idx = BASKET_STATE.items.findIndex(item=>item.lineId===lineId);
+  if(idx<0) return false;
+  BASKET_STATE.items.splice(idx,1);
+  return true;
+}
+
+function clearBasket(){
+  BASKET_STATE.items.length = 0;
+  BASKET_LINE_COUNTER = 1;
+}
+
+function getBasketItems(){
+  return BASKET_STATE.items.slice();
+}
+
+function getBasketSize(){
+  return BASKET_STATE.items.length;
+}
+
+function basketHasArticle(articleId){
+  return BASKET_STATE.items.some(item=>item.id===articleId);
+}
 const VIRTUAL = {
   items:[],
   container:null,
@@ -329,10 +420,6 @@ function trChild(c, f){
       const field = ta.dataset.field;
       if(field==='kurz'){ state.kurz=ta.value; }
       if(field==='beschreibung'){ state.beschreibung=ta.value; }
-      if(SELECTED.has(c.id)){
-        addOrUpdateSelectedFromRow();
-        renderSummary(true);
-      }
     });
   });
 
@@ -368,21 +455,18 @@ function trChild(c, f){
     }
   }
 
-  function addOrUpdateSelectedFromRow(){
+  function buildBasketPayload(){
     const q=parseQty(qtyInp?.value??'');
-    if(Number.isNaN(q)||q===0){ return false; }
+    if(Number.isNaN(q)||q===0){ return null; }
     const p=currentPreis();
-    const total=p*q;
-    SELECTED.set(c.id,{
+    return {
       id:c.id,
       kurz:currentKurz(),
       beschreibung:currentBeschr(),
       eh:currentEH(),
       preisNum:p,
       qtyNum:q,
-      totalNum:total
-    });
-    return true;
+    };
   }
 
   function recalcRowTotal(){
@@ -391,17 +475,6 @@ function trChild(c, f){
     const q=parseQty(qRaw);
     const p=currentPreis();
     updateTotalCell(q,p);
-    if(SELECTED.has(c.id)){
-      if(Number.isNaN(q)||q===0){
-        SELECTED.delete(c.id);
-        addBtn.classList.remove('added');
-        addBtn.textContent='➕';
-        renderSummary(true);
-      }else{
-        addOrUpdateSelectedFromRow();
-        renderSummary(true);
-      }
-    }
   }
 
   qtyInp?.addEventListener('input',()=>{
@@ -423,45 +496,45 @@ function trChild(c, f){
 
   einheitInp?.addEventListener('input',()=>{
     state.einheit=einheitInp.value;
-    if(SELECTED.has(c.id)){
-      addOrUpdateSelectedFromRow();
-      renderSummary(true);
-    }
   });
   einheitInfoInp?.addEventListener('input',()=>{
     state.einheitInfo=einheitInfoInp.value;
   });
 
   addBtn.addEventListener('click',()=>{
-    const already=SELECTED.has(c.id);
-    if(already){
-      SELECTED.delete(c.id);
-      addBtn.classList.remove('added');
-      addBtn.textContent='➕';
-      renderSummary(true);
-      return;
-    }
-    if(addOrUpdateSelectedFromRow()){
-      addBtn.classList.add('added');
-      addBtn.textContent='✔︎';
-      renderSummary(true);
-      setStatus('ok','Bereit.',1500);
-    }else{
+    const payload=buildBasketPayload();
+    if(!payload){
       setStatus('warn','Bitte zuerst eine gültige Menge (≠ 0) eingeben.',3500);
       if(addBtn.animate){
         addBtn.animate([{transform:'scale(1)'},{transform:'scale(1.08)'},{transform:'scale(1)'}],{duration:160});
       }
+      return;
     }
+    const added=addToBasket(payload);
+    if(!added){
+      setStatus('warn','Element konnte nicht hinzugefügt werden.',3000);
+      return;
+    }
+    if(added.removed){
+      addBtn.classList.remove('added');
+      addBtn.textContent='➕';
+      renderSummary(true);
+      setStatus('ok','Bereit.',1500);
+      return;
+    }
+    addBtn.classList.add('added');
+    addBtn.textContent='✔︎';
+    if(!BASKET_STATE.mergeSameItems){
+      setTimeout(()=>{
+        addBtn.classList.remove('added');
+        addBtn.textContent='➕';
+      }, 800);
+    }
+    renderSummary(true);
+    setStatus('ok','Bereit.',1500);
   });
 
-  if(SELECTED.has(c.id)){
-    const sel=SELECTED.get(c.id);
-    if(qtyInp) qtyInp.value=String(sel.qtyNum).replace('.',',');
-    if(preisInp && Number.isFinite(sel.preisNum)){
-      const formatted=String(sel.preisNum).replace('.',',');
-      preisInp.value=formatted;
-      state.preis=formatted;
-    }
+  if(BASKET_STATE.mergeSameItems && basketHasArticle(c.id)){
     addBtn.classList.add('added');
     addBtn.textContent='✔︎';
   }
@@ -757,7 +830,7 @@ async function loadFromSelectedSheet(wb){
   ROW_STATES.clear();
   fillGroupFilter();
   render();
-  SELECTED.clear();
+  clearBasket();
   renderSummary(false);
   requestAnimationFrame(()=>{ jumpToTop(); recomputeChromeOffset(); });
 }
@@ -814,7 +887,7 @@ sheetSel.addEventListener('focus',()=>{ lastSheetValue=sheetSel.value; });
 sheetSel.addEventListener('mousedown',()=>{ lastSheetValue=sheetSel.value; });
 sheetSel.addEventListener('change', async ()=>{
   const hasFilters = ($('#search').value||$('#fA').value||$('#fB').value||$('#fC').value||$('#groupFilter').value);
-  const hasSelection = SELECTED.size>0;
+  const hasSelection = getBasketSize()>0;
   if(hasFilters||hasSelection){
     const ok=confirm('Blatt wechseln? Alle Filter und markierten Positionen werden zurückgesetzt.');
     if(!ok){ sheetSel.value=lastSheetValue??sheetSel.value; return; }
@@ -826,7 +899,7 @@ $('#reset').addEventListener('click', ()=>{
   if(!confirm('Alle Filter, Mengen und markierten Positionen werden zurückgesetzt. Fortfahren?')) return;
   $('#search').value=$('#fA').value=$('#fB').value=$('#fC').value=''; $('#groupFilter').value='';
   ROW_STATES.clear();
-  render(); SELECTED.clear(); renderSummary(false); setDrawer(false); setStatus('info','Zurückgesetzt.',1500);
+  render(); clearBasket(); renderSummary(false); setDrawer(false); setStatus('info','Zurückgesetzt.',1500);
   requestAnimationFrame(()=>{ jumpToTop(); recomputeChromeOffset(); });
 });
 
@@ -859,9 +932,13 @@ function updateDelta(sum){
 
 function renderSummary(feedback){
   const wrap=$('#summaryTableWrap');
-  const items=[...SELECTED.values()].sort((a,b)=> String(a.id).localeCompare(String(b.id),'de',{numeric:true,sensitivity:'base'}));
+  const items=getBasketItems().sort((a,b)=>{
+    const byId=String(a.id).localeCompare(String(b.id),'de',{numeric:true,sensitivity:'base'});
+    if(byId!==0) return byId;
+    return String(a.lineId).localeCompare(String(b.lineId),'de',{numeric:true,sensitivity:'base'});
+  });
   let sum=0;
-  const rows=items.map(it=>{ sum+=it.totalNum;
+  const rows=items.map(it=>{ const totalNum=Number.isFinite(it.totalNum)?it.totalNum:0; sum+=totalNum;
     const kurzHTML = linkify(escapeHtml(it.kurz||''));
     const beschrHTML = linkify(escapeHtml(it.beschreibung||''));
     return `<tr>
@@ -869,7 +946,7 @@ function renderSummary(feedback){
       <td style="min-width:220px"><div><b>${kurzHTML}</b></div><div class="desc">${beschrHTML}</div></td>
       <td class="right" style="width:120px">${fmtPrice(it.preisNum)}</td>
       <td class="right" style="width:90px">${fmtQty(it.qtyNum)} ${escapeHtml(it.eh)}</td>
-      <td class="right${it.totalNum<0?' neg':''}" style="width:140px">${fmtPrice(it.totalNum)}</td>
+      <td class="right${totalNum<0?' neg':''}" style="width:140px">${fmtPrice(totalNum)}</td>
     </tr>`; }).join('');
   wrap.innerHTML = `
     <table>
@@ -987,7 +1064,11 @@ window.addEventListener('afterprint', clearPrintState);
 
 /* ============== Drucken (ein Fenster) ============== */
 function buildPrintDoc(){
-  const items=[...SELECTED.values()].sort((a,b)=> String(a.id).localeCompare(String(b.id),'de',{numeric:true,sensitivity:'base'}));
+  const items=getBasketItems().sort((a,b)=>{
+    const byId=String(a.id).localeCompare(String(b.id),'de',{numeric:true,sensitivity:'base'});
+    if(byId!==0) return byId;
+    return String(a.lineId).localeCompare(String(b.lineId),'de',{numeric:true,sensitivity:'base'});
+  });
   if(items.length===0) return null;
 
   const BVH=($('#bvhInput')?.value||'').trim()||'–';
@@ -1000,7 +1081,8 @@ function buildPrintDoc(){
 
   let tbody=''; let total=0;
   items.forEach(it=>{
-    total+=it.totalNum;
+    const lineTotal=Number.isFinite(it.totalNum)?it.totalNum:0;
+    total+=lineTotal;
     const kurzHTML = linkify(escapeHtml(it.kurz||''));
     const beschrHTML = linkify(escapeHtml(it.beschreibung||''));
     tbody+=`<tr class="item-row">
@@ -1008,7 +1090,7 @@ function buildPrintDoc(){
       <td><div><b>${kurzHTML}</b></div><div class="desc">${beschrHTML}</div></td>
       <td class="right">${fmtPrice(it.preisNum)}</td>
       <td class="right">${fmtQty(it.qtyNum)} ${escapeHtml(it.eh)}</td>
-      <td class="right${it.totalNum<0?' neg':''}">${fmtPrice(it.totalNum)}</td>
+      <td class="right${lineTotal<0?' neg':''}">${fmtPrice(lineTotal)}</td>
     </tr>`;
   });
 
@@ -1092,7 +1174,7 @@ function buildPrintDoc(){
 }
 
 document.getElementById('printSummary').addEventListener('click', async ()=>{
-  if(SELECTED.size===0){ setStatus('warn','Keine markierten Positionen zum Drucken.',3000); return; }
+  if(getBasketSize()===0){ setStatus('warn','Keine markierten Positionen zum Drucken.',3000); return; }
   const html = buildPrintDoc(); if(!html){ setStatus('warn','Nichts zu drucken.',3000); return; }
 
   const iframe = document.createElement('iframe');
