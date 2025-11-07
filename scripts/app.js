@@ -131,6 +131,9 @@ const BASKET_STATE = {
   items: [],
   mergeSameItems: false,
 };
+const MANUAL_DEFAULT_ARTNR = '0000';
+const MANUAL_DEFAULT_TITLE = 'Basispreis Haus';
+const MANUAL_DESCRIPTION_PLACEHOLDER = 'Ausbaustufe, Fensterelemente, etc.';
 let GROUP_SWITCH_ANIM = Promise.resolve();
 const ROW_STATES = new Map();
 let BASKET_LINE_COUNTER = 1;
@@ -162,6 +165,29 @@ function addToBasket(payload){
   if(!item){ return null; }
   BASKET_STATE.items.push(item);
   return item;
+}
+
+function createManualBasketItem(){
+  return {
+    lineId: nextLineId(),
+    id: MANUAL_DEFAULT_ARTNR,
+    kurz: MANUAL_DEFAULT_TITLE,
+    beschreibung: '',
+    eh: '',
+    preisNum: 0,
+    qtyNum: 0,
+    totalNum: 0,
+    isManual: true,
+  };
+}
+
+function addManualTopItem(){
+  const manualItem = createManualBasketItem();
+  BASKET_STATE.items.unshift(manualItem);
+  setDrawer(true);
+  renderSummary(false, {focusLineId: manualItem.lineId, focusField: 'title'});
+  setStatus('ok','Manuelle Position hinzugefügt.',2000);
+  return manualItem;
 }
 
 function setLineQty(lineId, qtyValue, options){
@@ -210,6 +236,10 @@ function removeLine(lineId){
   return true;
 }
 
+function findBasketItem(lineId){
+  return BASKET_STATE.items.find(item=>item.lineId===lineId);
+}
+
 function clearBasket(){
   BASKET_STATE.items.length = 0;
   BASKET_LINE_COUNTER = 1;
@@ -217,6 +247,30 @@ function clearBasket(){
 
 function getBasketItems(){
   return BASKET_STATE.items.slice();
+}
+
+function getDisplayOrderedItems(){
+  const items = getBasketItems();
+  if(items.length <= 1){
+    return items;
+  }
+  const positions = new Map();
+  BASKET_STATE.items.forEach((it, idx)=>positions.set(it.lineId, idx));
+  return items.sort((a,b)=>{
+    const aManual = !!a.isManual;
+    const bManual = !!b.isManual;
+    if(aManual !== bManual){
+      return aManual ? -1 : 1;
+    }
+    if(aManual && bManual){
+      const posA = positions.get(a.lineId) ?? 0;
+      const posB = positions.get(b.lineId) ?? 0;
+      return posA - posB;
+    }
+    const byId = String(a.id).localeCompare(String(b.id),'de',{numeric:true,sensitivity:'base'});
+    if(byId !== 0) return byId;
+    return String(a.lineId).localeCompare(String(b.lineId),'de',{numeric:true,sensitivity:'base'});
+  });
 }
 
 function getBasketSize(){
@@ -959,8 +1013,19 @@ $('#drawerHead').addEventListener('dblclick',()=>setDrawer(!DRAWER_OPEN));
 document.addEventListener('keydown',(e)=>{ if(e.altKey && (e.key==='o' || e.key==='O')){ e.preventDefault(); setDrawer(!DRAWER_OPEN); } });
 document.addEventListener('keydown',(e)=>{
   if(!e.altKey || !e.shiftKey) return;
-  if(e.key==='h' || e.key==='H'){ e.preventDefault(); triggerListPrint('all'); }
-  else if(e.key==='o' || e.key==='O'){ e.preventDefault(); triggerListPrint('current'); }
+  const key = String(e.key||'').toLowerCase();
+  if(key==='h'){ e.preventDefault(); triggerListPrint('all'); return; }
+  if(key==='o'){ e.preventDefault(); triggerListPrint('current'); return; }
+  if(key==='n'){
+    const target = e.target || document.activeElement;
+    if(target){
+      const tag = target.tagName;
+      const ignore = tag==='INPUT' || tag==='TEXTAREA' || tag==='SELECT' || target.isContentEditable;
+      if(ignore){ return; }
+    }
+    e.preventDefault();
+    addManualTopItem();
+  }
 });
 
 /* Zusammenfassung + Feedback */
@@ -989,6 +1054,10 @@ function computeBasketSum(){
 
 function formatQtyInputValue(qty){
   return Number.isFinite(qty) ? String(qty) : '';
+}
+
+function formatPriceInputValue(price){
+  return Number.isFinite(price) ? String(price) : '';
 }
 
 function updateLineTotalCell(cell, totalNum){
@@ -1021,32 +1090,64 @@ function updateSummaryDisplay(sum, count, sumCell, commitDelta){
   }
 }
 
-function renderSummary(feedback){
+function focusSummaryEditor(lineId, field){
+  if(!lineId) return;
+  const wrap = $('#summaryTableWrap');
+  if(!wrap) return;
+  const safeId = (typeof CSS!=='undefined' && CSS && typeof CSS.escape==='function') ? CSS.escape(lineId) : lineId.replace(/"/g,'\\"');
+  const selectors = [];
+  if(field){
+    selectors.push(`[data-line-id="${safeId}"][data-field="${field}"]`);
+  }
+  selectors.push(`[data-line-id="${safeId}"] input`, `[data-line-id="${safeId}"] textarea`);
+  let target=null;
+  for(const sel of selectors){
+    const el = wrap.querySelector(sel);
+    if(el){ target=el; break; }
+  }
+  if(target){
+    target.focus();
+    if(typeof target.select==='function'){ try{ target.select(); }catch{} }
+  }
+}
+
+function renderSummary(feedback, options={}){
   const wrap=$('#summaryTableWrap');
   if(!wrap) return;
-  const items=getBasketItems().sort((a,b)=>{
-    const byId=String(a.id).localeCompare(String(b.id),'de',{numeric:true,sensitivity:'base'});
-    if(byId!==0) return byId;
-    return String(a.lineId).localeCompare(String(b.lineId),'de',{numeric:true,sensitivity:'base'});
-  });
+  const items=getDisplayOrderedItems();
 
   let sum=0;
   const rows=items.map(it=>{
     const totalNum = getLineTotalValue(it);
     if(Number.isFinite(totalNum)) sum+=totalNum;
+    const isManual = !!it.isManual;
     const kurzHTML = linkify(escapeHtml(it.kurz||''));
     const beschrHTML = linkify(escapeHtml(it.beschreibung||''));
     const qtyVal = formatQtyInputValue(it.qtyNum);
     const totalClass = Number.isFinite(totalNum) && totalNum<0 ? ' neg' : '';
     const totalText = Number.isFinite(totalNum) ? fmtPrice(totalNum) : '–';
-    return `<tr data-line-id="${escapeHtml(it.lineId)}" data-price="${Number.isFinite(it.preisNum)?String(it.preisNum):'0'}">
+    const manualEditor = isManual
+      ? `<div class="manual-editor">
+          <input type="text" class="manual-title" data-line-id="${escapeHtml(it.lineId)}" data-field="title" value="${escapeHtml(it.kurz||'')}" placeholder="${escapeHtml(MANUAL_DEFAULT_TITLE)}" />
+          <textarea class="manual-desc" data-line-id="${escapeHtml(it.lineId)}" data-field="description" placeholder="${escapeHtml(MANUAL_DESCRIPTION_PLACEHOLDER)}">${escapeHtml(it.beschreibung||'')}</textarea>
+        </div>`
+      : `<div><b>${kurzHTML}</b></div><div class="desc">${beschrHTML}</div>`;
+    const priceContent = isManual
+      ? `<div class="price-editor">
+          <input type="number" step="0.01" inputmode="decimal" class="price-input" data-line-id="${escapeHtml(it.lineId)}" data-field="price" placeholder="0,00" value="${escapeHtml(formatPriceInputValue(it.preisNum))}" />
+        </div>`
+      : fmtPrice(it.preisNum);
+    const unitEditor = isManual
+      ? `<input type="text" class="unit-input" data-line-id="${escapeHtml(it.lineId)}" data-field="unit" placeholder="Einheit" value="${escapeHtml(it.eh||'')}" />`
+      : `<span class="qty-unit" data-role="qty-unit">${escapeHtml(it.eh||'')}</span>`;
+    return `<tr data-line-id="${escapeHtml(it.lineId)}" data-manual="${isManual?'true':'false'}" data-price="${Number.isFinite(it.preisNum)?String(it.preisNum):'0'}">
       <td style="width:120px">${escapeHtml(it.id)}</td>
-      <td style="min-width:220px"><div><b>${kurzHTML}</b></div><div class="desc">${beschrHTML}</div></td>
-      <td class="right" style="width:120px">${fmtPrice(it.preisNum)}</td>
+      <td style="min-width:220px">${manualEditor}</td>
+      <td class="right" style="width:120px">${priceContent}</td>
       <td class="right" style="width:140px">
         <div class="qty-editor">
-          <input type="number" step="0.01" inputmode="decimal" class="qty-input" data-line-id="${escapeHtml(it.lineId)}" value="${escapeHtml(qtyVal)}" />
-          <span class="qty-unit" data-role="qty-unit">${escapeHtml(it.eh||'')}</span>
+          <input type="number" step="0.01" inputmode="decimal" class="qty-input" data-line-id="${escapeHtml(it.lineId)}" data-field="qty" value="${escapeHtml(qtyVal)}" />
+          ${unitEditor}
         </div>
       </td>
       <td class="right${totalClass}" data-role="line-total" data-line-id="${escapeHtml(it.lineId)}" data-total="${Number.isFinite(totalNum)?String(totalNum):'0'}">${totalText}</td>
@@ -1069,26 +1170,51 @@ function renderSummary(feedback){
 
   attachSummaryInteractions(wrap);
 
+  if(options?.focusLineId){
+    focusSummaryEditor(options.focusLineId, options.focusField);
+  }
+
   if(feedback){ pulseHead(); showToast(); setStatus('ok','Bereit.',1500); }
 }
 
 function attachSummaryInteractions(wrap){
   const sumCell = wrap.querySelector('[data-role="summary-total"]');
-  const inputs = wrap.querySelectorAll('input.qty-input');
+  const qtyInputs = wrap.querySelectorAll('input.qty-input');
+  const priceInputs = wrap.querySelectorAll('input.price-input');
+  const titleInputs = wrap.querySelectorAll('input.manual-title');
+  const descInputs = wrap.querySelectorAll('textarea.manual-desc');
+  const unitInputs = wrap.querySelectorAll('input.unit-input');
 
   const recomputeAndDisplay = (commit=false)=>{
     const sum = computeBasketSum();
     updateSummaryDisplay(sum, BASKET_STATE.items.length, sumCell, commit);
   };
 
-  inputs.forEach(inp=>{
+  const setRowInvalid = (row, key, invalid)=>{
+    if(!row) return;
+    if(invalid){ row.dataset[key] = '1'; }
+    else{ delete row.dataset[key]; }
+    if(row.dataset.qtyInvalid || row.dataset.priceInvalid){
+      row.classList.add('invalid');
+    }else{
+      row.classList.remove('invalid');
+    }
+  };
+
+  const setInputInvalid = (input, invalid)=>{
+    if(!input) return;
+    if(invalid){ input.classList.add('invalid'); }
+    else{ input.classList.remove('invalid'); }
+  };
+
+  qtyInputs.forEach(inp=>{
     const lineId = inp.dataset.lineId;
     const row = inp.closest('tr');
     const totalCell = row?.querySelector('[data-role="line-total"]');
 
     inp.addEventListener('input',()=>{
       if(!lineId) return;
-      const existing = BASKET_STATE.items.find(it=>it.lineId===lineId);
+      const existing = findBasketItem(lineId);
       if(!existing){ return; }
       const baseTotal = getLineTotalValue(existing);
       const preview = setLineQty(lineId, inp.value, {commit:false});
@@ -1097,13 +1223,13 @@ function attachSummaryInteractions(wrap){
         return;
       }
       if(preview.status === 'invalid'){
-        row?.classList.add('invalid');
-        inp.classList.add('invalid');
+        setRowInvalid(row,'qtyInvalid',true);
+        setInputInvalid(inp,true);
         return;
       }
 
-      row?.classList.remove('invalid');
-      inp.classList.remove('invalid');
+      setRowInvalid(row,'qtyInvalid',false);
+      setInputInvalid(inp,false);
 
       if(preview.status === 'preview' && preview.item){
         updateLineTotalCell(totalCell, preview.item.totalNum);
@@ -1123,7 +1249,7 @@ function attachSummaryInteractions(wrap){
 
     inp.addEventListener('change',()=>{
       if(!lineId) return;
-      const before = BASKET_STATE.items.find(it=>it.lineId===lineId);
+      const before = findBasketItem(lineId);
       const result = setLineQty(lineId, inp.value);
 
       if(result.status === 'removed'){
@@ -1138,8 +1264,8 @@ function attachSummaryInteractions(wrap){
       }
 
       if(result.status === 'invalid'){
-        row?.classList.add('invalid');
-        inp.classList.add('invalid');
+        setRowInvalid(row,'qtyInvalid',true);
+        setInputInvalid(inp,true);
         if(before){
           inp.value = formatQtyInputValue(before.qtyNum);
           updateLineTotalCell(totalCell, getLineTotalValue(before));
@@ -1149,8 +1275,8 @@ function attachSummaryInteractions(wrap){
         return;
       }
 
-      row?.classList.remove('invalid');
-      inp.classList.remove('invalid');
+      setRowInvalid(row,'qtyInvalid',false);
+      setInputInvalid(inp,false);
 
       if(result.status === 'updated' && result.item){
         inp.value = formatQtyInputValue(result.item.qtyNum);
@@ -1163,9 +1289,100 @@ function attachSummaryInteractions(wrap){
         recomputeAndDisplay(false);
       }
       else{
-        updateLineTotalCell(totalCell, getLineTotalValue(BASKET_STATE.items.find(it=>it.lineId===lineId)));
+        updateLineTotalCell(totalCell, getLineTotalValue(findBasketItem(lineId)));
         recomputeAndDisplay(false);
       }
+    });
+  });
+
+  priceInputs.forEach(inp=>{
+    const lineId = inp.dataset.lineId;
+    const row = inp.closest('tr');
+    const totalCell = row?.querySelector('[data-role="line-total"]');
+
+    inp.addEventListener('input',()=>{
+      if(!lineId) return;
+      const existing = findBasketItem(lineId);
+      if(!existing){ renderSummary(false); return; }
+      const baseTotal = getLineTotalValue(existing);
+      const raw = inp.value;
+      const trimmed = typeof raw === 'string' ? raw.trim() : '';
+      let previewPrice = 0;
+      if(trimmed){
+        const parsed = parseEuro(raw);
+        if(!Number.isFinite(parsed)){
+          setRowInvalid(row,'priceInvalid',true);
+          setInputInvalid(inp,true);
+          return;
+        }
+        previewPrice = parsed;
+      }
+      setRowInvalid(row,'priceInvalid',false);
+      setInputInvalid(inp,false);
+      const qty = Number.isFinite(existing.qtyNum) ? existing.qtyNum : 0;
+      const previewTotal = qty * previewPrice;
+      updateLineTotalCell(totalCell, previewTotal);
+      const previewSum = computeBasketSum() - baseTotal + previewTotal;
+      updateSummaryDisplay(previewSum, BASKET_STATE.items.length, sumCell, false);
+    });
+
+    inp.addEventListener('change',()=>{
+      if(!lineId) return;
+      const existing = findBasketItem(lineId);
+      if(!existing){ renderSummary(false); return; }
+      const raw = inp.value;
+      const trimmed = typeof raw === 'string' ? raw.trim() : '';
+      let newPrice = 0;
+      if(trimmed){
+        const parsed = parseEuro(raw);
+        if(!Number.isFinite(parsed)){
+          setRowInvalid(row,'priceInvalid',true);
+          setInputInvalid(inp,true);
+          inp.value = formatPriceInputValue(existing.preisNum);
+          updateLineTotalCell(totalCell, getLineTotalValue(existing));
+          setStatus('warn','Ungültiger Preis.',2500);
+          recomputeAndDisplay(false);
+          return;
+        }
+        newPrice = parsed;
+      }
+      existing.preisNum = newPrice;
+      const qty = Number.isFinite(existing.qtyNum) ? existing.qtyNum : 0;
+      existing.totalNum = qty * newPrice;
+      inp.value = formatPriceInputValue(existing.preisNum);
+      updateLineTotalCell(totalCell, existing.totalNum);
+      setRowInvalid(row,'priceInvalid',false);
+      setInputInvalid(inp,false);
+      recomputeAndDisplay(true);
+    });
+  });
+
+  titleInputs.forEach(inp=>{
+    const lineId = inp.dataset.lineId;
+    if(!lineId) return;
+    inp.addEventListener('input',()=>{
+      const existing = findBasketItem(lineId);
+      if(existing){ existing.kurz = inp.value; }
+    });
+  });
+
+  descInputs.forEach(inp=>{
+    const lineId = inp.dataset.lineId;
+    if(!lineId) return;
+    requestAnimationFrame(()=>autoGrow(inp));
+    inp.addEventListener('input',()=>{
+      autoGrow(inp);
+      const existing = findBasketItem(lineId);
+      if(existing){ existing.beschreibung = inp.value; }
+    });
+  });
+
+  unitInputs.forEach(inp=>{
+    const lineId = inp.dataset.lineId;
+    if(!lineId) return;
+    inp.addEventListener('input',()=>{
+      const existing = findBasketItem(lineId);
+      if(existing){ existing.eh = inp.value; }
     });
   });
 
@@ -1286,11 +1503,7 @@ window.addEventListener('afterprint', clearPrintState);
 
 /* ============== Drucken (ein Fenster) ============== */
 function buildPrintDoc(){
-  const items=getBasketItems().sort((a,b)=>{
-    const byId=String(a.id).localeCompare(String(b.id),'de',{numeric:true,sensitivity:'base'});
-    if(byId!==0) return byId;
-    return String(a.lineId).localeCompare(String(b.lineId),'de',{numeric:true,sensitivity:'base'});
-  });
+  const items=getDisplayOrderedItems();
   if(items.length===0) return null;
 
   const BVH=($('#bvhInput')?.value||'').trim()||'–';
