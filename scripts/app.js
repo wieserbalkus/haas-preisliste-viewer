@@ -133,6 +133,7 @@ const BASKET_STATE = {
 };
 const MANUAL_DEFAULT_ARTNR = '0000';
 const MANUAL_DEFAULT_TITLE = 'Basispreis Haus';
+const MANUAL_DEFAULT_UNIT = 'pau';
 const MANUAL_DESCRIPTION_PLACEHOLDER = 'Ausbaustufe, Fensterelemente, etc.';
 let GROUP_SWITCH_ANIM = Promise.resolve();
 const ROW_STATES = new Map();
@@ -174,7 +175,7 @@ function createManualBasketItem(){
     id: MANUAL_DEFAULT_ARTNR,
     kurz: MANUAL_DEFAULT_TITLE,
     beschreibung: '',
-    eh: '',
+    eh: MANUAL_DEFAULT_UNIT,
     preisNum: 0,
     qtyNum: 0,
     totalNum: 0,
@@ -1229,9 +1230,16 @@ function renderSummary(feedback, options={}){
           <input type="number" step="0.01" inputmode="decimal" class="price-input" data-line-id="${escapeHtml(it.lineId)}" data-field="price" placeholder="0,00" value="${escapeHtml(formatPriceInputValue(it.preisNum))}" />
         </div>`
       : fmtPrice(it.preisNum);
+    let unitValue = it.eh || '';
+    if(isManual){
+      unitValue = unitValue || MANUAL_DEFAULT_UNIT;
+      if(it.eh !== unitValue){
+        it.eh = unitValue;
+      }
+    }
     const unitEditor = isManual
-      ? `<input type="text" class="unit-input" data-line-id="${escapeHtml(it.lineId)}" data-field="unit" placeholder="Einheit" value="${escapeHtml(it.eh||'')}" />`
-      : `<span class="qty-unit" data-role="qty-unit">${escapeHtml(it.eh||'')}</span>`;
+      ? `<input type="text" class="unit-input" data-line-id="${escapeHtml(it.lineId)}" data-field="unit" value="${escapeHtml(unitValue)}" readonly aria-readonly="true" tabindex="-1" />`
+      : `<span class="qty-unit" data-role="qty-unit">${escapeHtml(unitValue)}</span>`;
     const rowClasses = ['basket-row'];
     if(isManual){ rowClasses.push('manual-row'); }
     if(isAlternative){ rowClasses.push('alt-item'); }
@@ -1490,6 +1498,7 @@ function attachSummaryInteractions(wrap){
   });
 
   unitInputs.forEach(inp=>{
+    if(inp.readOnly || inp.disabled) return;
     const lineId = inp.dataset.lineId;
     if(!lineId) return;
     inp.addEventListener('input',()=>{

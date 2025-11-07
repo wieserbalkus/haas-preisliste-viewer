@@ -182,8 +182,8 @@ th.center,td.center{text-align:center}
 .qty{width:72px;text-align:right}
 .qty::placeholder{color:#bbb}
 
-.control-cell{vertical-align:middle;text-align:right}
-.qty-action{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.control-cell{vertical-align:top;text-align:right}
+.qty-action{display:flex;align-items:flex-start;justify-content:flex-end;gap:8px;flex-wrap:wrap}
 .qty-action .qty{flex:0 0 72px}
 .qty-action .btn-plus{flex:0 0 auto}
 @media (min-width:1200px){
@@ -222,11 +222,12 @@ th.center,td.center{text-align:center}
 .summary h3{margin:6px 0 8px 0;font-size:15px}
 .summary table{width:100%;table-layout:auto}
 .summary th,.summary td{padding:6px 8px;border-bottom:1px dashed #eee}
+.summary tbody td{vertical-align:top}
 .summary th.center{text-align:center}
 .summary .tot{font-weight:700}
 .summary td.artnr-cell{width:120px}
 .summary td.desc-cell{min-width:220px}
-.summary td.price-cell,.summary td.qty-cell,.summary td.unit-cell,.summary td.alt-cell{vertical-align:middle}
+.summary td.price-cell,.summary td.qty-cell,.summary td.unit-cell,.summary td.alt-cell{vertical-align:top}
 .summary td.qty-cell{text-align:right}
 .summary td.unit-cell{text-align:left}
 .summary td.alt-cell{text-align:center;width:60px}
@@ -247,7 +248,7 @@ th.center,td.center{text-align:center}
 .summary .manual-title:focus{outline:2px solid #f59e0b22;border-color:#f59e0b}
 .summary .manual-desc{width:100%;min-height:48px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;background:#fff;font:inherit;color:inherit;line-height:1.35;resize:vertical}
 .summary .manual-desc:focus{outline:2px solid #f59e0b22;border-color:#f59e0b}
-.summary .price-editor{display:flex;align-items:center;justify-content:flex-end}
+.summary .price-editor{display:flex;align-items:flex-start;justify-content:flex-end}
 .summary .price-input{width:100%;text-align:right;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;background:#fff;font:inherit;color:inherit}
 .summary .price-input:focus{outline:2px solid #f59e0b22;border-color:#f59e0b}
 .summary .price-input.invalid{border-color:#b91c1c}
