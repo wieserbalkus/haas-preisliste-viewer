@@ -129,7 +129,7 @@ let DRAWER_OPEN = false;
 let CURRENT_SHEET = '';
 const BASKET_STATE = {
   items: [],
-  mergeSameItems: true,
+  mergeSameItems: false,
 };
 let GROUP_SWITCH_ANIM = Promise.resolve();
 const ROW_STATES = new Map();
@@ -139,13 +139,13 @@ function nextLineId(){
   return `ln_${BASKET_LINE_COUNTER++}`;
 }
 
-function cloneBasketItem(payload){
+function cloneBasketItem(payload, options={}){
   if(!payload || !payload.id){ return null; }
   const qtyRaw = Number.isFinite(payload.qtyNum) ? payload.qtyNum : parseQty(payload.qtyNum);
   if(!Number.isFinite(qtyRaw) || qtyRaw === 0){ return null; }
   const preisRaw = Number.isFinite(payload.preisNum) ? payload.preisNum : parseEuro(payload.preisNum);
   const item = {
-    lineId: payload.lineId || nextLineId(),
+    lineId: options.forceNewLineId ? nextLineId() : (payload.lineId || nextLineId()),
     id: payload.id,
     kurz: payload.kurz ?? '',
     beschreibung: payload.beschreibung ?? '',
@@ -158,28 +158,8 @@ function cloneBasketItem(payload){
 }
 
 function addToBasket(payload){
-  const item = cloneBasketItem(payload);
+  const item = cloneBasketItem(payload, {forceNewLineId:true});
   if(!item){ return null; }
-  if(BASKET_STATE.mergeSameItems){
-    const idx = BASKET_STATE.items.findIndex(existing=>existing.id===item.id);
-    if(idx>=0){
-      const existing = BASKET_STATE.items[idx];
-      const mergedQty = existing.qtyNum + item.qtyNum;
-      if(mergedQty === 0){
-        BASKET_STATE.items.splice(idx,1);
-        return {...existing, qtyNum:0, totalNum:0, removed:true};
-      }
-      const merged = {
-        ...existing,
-        ...item,
-        lineId: existing.lineId,
-        qtyNum: mergedQty,
-      };
-      merged.totalNum = merged.preisNum * merged.qtyNum;
-      BASKET_STATE.items[idx] = merged;
-      return merged;
-    }
-  }
   BASKET_STATE.items.push(item);
   return item;
 }
