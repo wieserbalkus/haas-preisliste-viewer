@@ -429,7 +429,7 @@ function trGroup(g, f){
   tr.className='group';
   tr.id = 'grp_'+g.groupId;
   const title = f && f.rawQ ? hlAndLink(g.title||'', f.terms) : escapeHtml(g.title||'');
-  tr.innerHTML=`<td colspan="10"><strong>${escapeHtml(g.groupId)} – ${title}</strong></td>`;
+  tr.innerHTML=`<td colspan="9"><strong>${escapeHtml(g.groupId)} – ${title}</strong></td>`;
   return tr;
 }
 
@@ -486,13 +486,10 @@ function trChild(c, f){
 
   const qtyId=`q_${c.id}`, addBtnId=`add_${c.id}`;
   const qtyValue = state.qty || '';
-  const qtyHTML = `<div class="qty-wrap">
+  const controlsHTML = `<div class="qty-action">
       <input id="${qtyId}" class="qty" type="text" inputmode="decimal" placeholder="0" title="Menge" value="${escapeHtml(qtyValue)}" />
-    </div>`;
-  const actionHTML = `<div class="action-wrap">
       <label class="alt-flag" title="Als Alternative markieren">
-        <input type="checkbox" class="alt-toggle" />
-        <span>Alt.</span>
+        <input type="checkbox" class="alt-toggle" aria-label="Als Alternative markieren" />
       </label>
       <button id="${addBtnId}" type="button" class="btn-plus" title="Zur Zusammenfassung hinzufügen">➕</button>
     </div>`;
@@ -504,8 +501,7 @@ function trChild(c, f){
     <td>${ehHTML}</td>
     <td>${ehInfoHTML}</td>
     <td class="right" data-sort="${preisNum}">${preisHTML}</td>
-    <td>${qtyHTML}</td>
-    <td class="center action-cell">${actionHTML}</td>
+    <td class="control-cell">${controlsHTML}</td>
     <td class="right" data-total="0">–</td>
     <td class="desc">${hinweisHTML}</td>`;
 
@@ -724,7 +720,7 @@ function createSpacer(){
   const tr=document.createElement('tr');
   tr.className='virtual-spacer';
   tr.setAttribute('aria-hidden','true');
-  tr.innerHTML='<td colspan="10" style="padding:0;border:none;height:0;border:none"></td>';
+  tr.innerHTML='<td colspan="9" style="padding:0;border:none;height:0;border:none"></td>';
   return tr;
 }
 function setSpacerHeight(spacer,height){
@@ -886,7 +882,7 @@ function render(){
   if(!items.length){
     clearVirtual();
     if(body){
-      body.innerHTML='<tr class="empty"><td colspan="10">Keine Positionen gefunden.</td></tr>';
+      body.innerHTML='<tr class="empty"><td colspan="9">Keine Positionen gefunden.</td></tr>';
     }
     VIRTUAL.items=[];
     return;
@@ -1241,19 +1237,16 @@ function renderSummary(feedback, options={}){
     if(isAlternative){ rowClasses.push('alt-item'); }
     const altToggle = `<label class="alt-flag alt-flag-basket" title="Als Alternative markieren">
         <input type="checkbox" class="alt-toggle-basket" data-line-id="${escapeHtml(it.lineId)}" ${isAlternative?'checked':''} aria-label="Alternativposition" />
-        <span>Alt.</span>
       </label>`;
     return `<tr class="${rowClasses.join(' ')}" data-line-id="${escapeHtml(it.lineId)}" data-manual="${isManual?'true':'false'}" data-alt="${isAlternative?'true':'false'}" data-price="${Number.isFinite(it.preisNum)?String(it.preisNum):'0'}">
-      <td style="width:120px" data-role="artnr">${escapeHtml(displayArtnr(it))}</td>
-      <td class="center alt-cell">${altToggle}</td>
-      <td style="min-width:220px">${manualEditor}</td>
-      <td class="right" style="width:120px" data-role="price-cell">${priceContent}</td>
-      <td class="right" style="width:140px">
-        <div class="qty-editor">
-          <input type="number" step="0.01" inputmode="decimal" class="qty-input" data-line-id="${escapeHtml(it.lineId)}" data-field="qty" value="${escapeHtml(qtyVal)}" />
-          ${unitEditor}
-        </div>
+      <td class="artnr-cell" data-role="artnr">${escapeHtml(displayArtnr(it))}</td>
+      <td class="desc-cell">${manualEditor}</td>
+      <td class="right price-cell" data-role="price-cell">${priceContent}</td>
+      <td class="right qty-cell">
+        <input type="number" step="0.01" inputmode="decimal" class="qty-input" data-line-id="${escapeHtml(it.lineId)}" data-field="qty" value="${escapeHtml(qtyVal)}" />
       </td>
+      <td class="unit-cell">${unitEditor}</td>
+      <td class="center alt-cell">${altToggle}</td>
       <td class="${totalClasses.join(' ')}" data-role="line-total" data-line-id="${escapeHtml(it.lineId)}" data-total="${Number.isFinite(totalNum)?String(totalNum):'0'}">${totalInfo.text}</td>
       <td class="action" style="width:48px">
         <button type="button" class="remove-line" data-line-id="${escapeHtml(it.lineId)}" title="Position entfernen" aria-label="Position entfernen">✖</button>
@@ -1261,15 +1254,15 @@ function renderSummary(feedback, options={}){
     </tr>`;
   }).join('');
 
-  const bodyHTML = rows || '<tr class="empty"><td colspan="7" class="muted">Keine Positionen markiert.</td></tr>';
+  const bodyHTML = rows || '<tr class="empty"><td colspan="8" class="muted">Keine Positionen markiert.</td></tr>';
   const sums = { main: sumMain, alt: sumAlt, total: sumMain + sumAlt };
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>Art.Nr.</th><th class="center">Alt.</th><th>Bezeichnung (Kurztext + Beschreibung)</th><th class="right">EH-Preis</th><th class="right">Menge</th><th class="right">Gesamt</th><th class="center">&nbsp;</th></tr></thead>
+      <thead><tr><th>Art.Nr.</th><th>Bezeichnung (Kurztext + Beschreibung)</th><th class="right">EH-Preis</th><th class="right">Menge</th><th>EH</th><th class="center">Alt.</th><th class="right">Gesamtpreis</th><th class="center">&nbsp;</th></tr></thead>
       <tbody>${bodyHTML}</tbody>
       <tfoot>
-        <tr class="tot total-main"><td colspan="5" class="right">Gesamtsumme</td><td class="right total-cell" id="sum-main" data-sum="${String(sumMain)}">${fmtPrice(sumMain)}</td><td></td></tr>
-        <tr class="tot total-alt"><td colspan="5" class="right"><em>Gesamtsumme Alternativpositionen</em></td><td class="right total-cell alt-total-cell" id="sum-alt" data-sum="${String(sumAlt)}">(${fmtPrice(sumAlt)})</td><td></td></tr>
+        <tr class="tot total-main"><td colspan="6" class="right">Gesamtsumme</td><td class="right total-cell" id="sum-main" data-sum="${String(sumMain)}">${fmtPrice(sumMain)}</td><td></td></tr>
+        <tr class="tot total-alt"><td colspan="6" class="right"><em>Gesamtsumme Alternativpositionen</em></td><td class="right total-cell alt-total-cell" id="sum-alt" data-sum="${String(sumAlt)}">(${fmtPrice(sumAlt)})</td><td></td></tr>
       </tfoot>
     </table>`;
 
