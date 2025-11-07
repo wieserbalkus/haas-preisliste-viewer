@@ -182,11 +182,11 @@ tbody tr:nth-child(even):not(.group){background:var(--row)}
 .qty::placeholder{color:#bbb}
 
 .qty-wrap{display:flex;align-items:center;gap:6px}
-.addbtn{min-width:28px;height:28px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;line-height:1;display:inline-flex;align-items:center;justify-content:center;padding:0 10px;gap:4px;font-size:.875rem;white-space:nowrap;transition:background-color .2s ease,color .2s ease,border-color .2s ease}
-.addbtn:hover{background:#fff9f0;border-color:#f59e0b}
-.addbtn.added{background:#f59e0b;color:#fff;border-color:#f59e0b}
-.addbtn.removed{background:#f87171;color:#fff;border-color:#ef4444}
-.addbtn:disabled{opacity:.4;cursor:not-allowed}
+.btn-plus{min-width:28px;height:28px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;line-height:1;display:inline-flex;align-items:center;justify-content:center;padding:0 10px;gap:4px;font-size:.875rem;white-space:nowrap;transition:background-color .2s ease,color .2s ease,border-color .2s ease}
+.btn-plus:hover{background:#fff9f0;border-color:#f59e0b}
+.btn-plus.added{background:#f59e0b;color:#fff;border-color:#f59e0b}
+.btn-plus.removed{background:#f87171;color:#fff;border-color:#ef4444}
+.btn-plus:disabled{opacity:.4;cursor:not-allowed}
 
 .cell-edit{width:100%;border:1px solid #d1d5db;border-radius:6px;padding:6px 8px;font:inherit;color:inherit;background:#fff}
 .cell-edit.ta{min-height:28px;height:34px;resize:vertical;overflow:hidden;line-height:1.25}

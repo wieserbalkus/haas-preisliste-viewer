@@ -421,7 +421,7 @@ function trChild(c, f){
   const qtyValue = state.qty || '';
   const qtyHTML = `<div class="qty-wrap">
       <input id="${qtyId}" class="qty" type="text" inputmode="decimal" placeholder="0" title="Menge" value="${escapeHtml(qtyValue)}" />
-      <button id="${addBtnId}" type="button" class="addbtn" title="Zur Zusammenfassung hinzufügen">➕</button>
+      <button id="${addBtnId}" type="button" class="btn-plus" title="Zur Zusammenfassung hinzufügen">➕</button>
     </div>`;
 
   tr.innerHTML = `
@@ -445,11 +445,12 @@ function trChild(c, f){
     });
   });
 
-  const qtyInp=tr.querySelector('#'+CSS.escape(qtyId));
+  const qtyInp=tr.querySelector('input.qty');
   const preisInp=tr.querySelector('input[data-field="preis"]');
   const totalCell=tr.querySelector('[data-total]');
-  const addBtn=tr.querySelector('#'+CSS.escape(addBtnId));
+  const addBtn=tr.querySelector('.btn-plus');
   let addFeedbackTimer=null;
+  let pendingAddReset=null;
 
   function resetAddButton(){
     addBtn.classList.remove('added','removed');
@@ -460,19 +461,37 @@ function trChild(c, f){
   function showAddButtonFeedback(kind){
     if(addFeedbackTimer){
       clearTimeout(addFeedbackTimer);
+      addFeedbackTimer=null;
     }
     if(kind==='removed'){
       addBtn.classList.remove('added');
       addBtn.classList.add('removed');
       addBtn.textContent='entfernt ✖';
-    }else{
-      addBtn.classList.remove('removed');
-      addBtn.classList.add('added');
-      addBtn.textContent='added ✔︎';
+      pendingAddReset=null;
+      addFeedbackTimer=setTimeout(()=>{
+        resetAddButton();
+        addFeedbackTimer=null;
+      },2400);
+      return;
     }
+    addBtn.classList.remove('removed');
+    addBtn.classList.add('added');
+    addBtn.textContent='✓';
+    const resetToken=Symbol('added-feedback');
+    pendingAddReset={token:resetToken, userChanged:false};
     addFeedbackTimer=setTimeout(()=>{
+      if(pendingAddReset && pendingAddReset.token===resetToken){
+        if(!pendingAddReset.userChanged && qtyInp){
+          qtyInp.value='';
+          qtyInp.placeholder='0';
+          state.qty='';
+          recalcRowTotal();
+        }
+        pendingAddReset=null;
+      }
       resetAddButton();
-    }, 2400);
+      addFeedbackTimer=null;
+    }, 2500);
   }
 
   const einheitInp=tr.querySelector('input[data-field="einheit"]');
@@ -527,7 +546,16 @@ function trChild(c, f){
   qtyInp?.addEventListener('input',()=>{
     qtyInp.value=qtyInp.value.replace(/[^\d.,-]/g,'').replace(/(?!^)-/g,'');
     state.qty=qtyInp.value;
+    if(pendingAddReset){
+      pendingAddReset.userChanged=true;
+    }
     recalcRowTotal();
+  });
+
+  qtyInp?.addEventListener('change',()=>{
+    if(pendingAddReset){
+      pendingAddReset.userChanged=true;
+    }
   });
 
   if(preisInp){
