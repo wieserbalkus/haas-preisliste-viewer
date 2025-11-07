@@ -243,9 +243,6 @@ function getBasketSize(){
   return BASKET_STATE.items.length;
 }
 
-function basketHasArticle(articleId){
-  return BASKET_STATE.items.some(item=>item.id===articleId);
-}
 const VIRTUAL = {
   items:[],
   container:null,
@@ -452,6 +449,31 @@ function trChild(c, f){
   const preisInp=tr.querySelector('input[data-field="preis"]');
   const totalCell=tr.querySelector('[data-total]');
   const addBtn=tr.querySelector('#'+CSS.escape(addBtnId));
+  let addFeedbackTimer=null;
+
+  function resetAddButton(){
+    addBtn.classList.remove('added','removed');
+    addBtn.textContent='➕';
+    addFeedbackTimer=null;
+  }
+
+  function showAddButtonFeedback(kind){
+    if(addFeedbackTimer){
+      clearTimeout(addFeedbackTimer);
+    }
+    if(kind==='removed'){
+      addBtn.classList.remove('added');
+      addBtn.classList.add('removed');
+      addBtn.textContent='entfernt ✖';
+    }else{
+      addBtn.classList.remove('removed');
+      addBtn.classList.add('added');
+      addBtn.textContent='added ✔︎';
+    }
+    addFeedbackTimer=setTimeout(()=>{
+      resetAddButton();
+    }, 2400);
+  }
 
   const einheitInp=tr.querySelector('input[data-field="einheit"]');
   const einheitInfoInp=tr.querySelector('input[data-field="einheitInfo"]');
@@ -541,28 +563,17 @@ function trChild(c, f){
       return;
     }
     if(added.removed){
-      addBtn.classList.remove('added');
-      addBtn.textContent='➕';
+      showAddButtonFeedback('removed');
       renderSummary(true);
       setStatus('ok','Bereit.',1500);
       return;
     }
-    addBtn.classList.add('added');
-    addBtn.textContent='✔︎';
-    if(!BASKET_STATE.mergeSameItems){
-      setTimeout(()=>{
-        addBtn.classList.remove('added');
-        addBtn.textContent='➕';
-      }, 800);
-    }
+    showAddButtonFeedback('added');
     renderSummary(true);
     setStatus('ok','Bereit.',1500);
   });
 
-  if(BASKET_STATE.mergeSameItems && basketHasArticle(c.id)){
-    addBtn.classList.add('added');
-    addBtn.textContent='✔︎';
-  }
+  resetAddButton();
 
   recalcRowTotal();
   return tr;
