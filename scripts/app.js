@@ -184,19 +184,44 @@ function addToBasket(payload){
   return item;
 }
 
-function updateLineQty(lineId, qtyValue){
+function setLineQty(lineId, qtyValue, options){
   const idx = BASKET_STATE.items.findIndex(item=>item.lineId===lineId);
-  if(idx<0) return null;
-  const qtyNum = Number.isFinite(qtyValue) ? qtyValue : parseQty(qtyValue);
-  if(!Number.isFinite(qtyNum) || qtyNum === 0){
-    BASKET_STATE.items.splice(idx,1);
-    return null;
+  if(idx<0){
+    return {status:'missing', item:null};
   }
-  const item = {...BASKET_STATE.items[idx], qtyNum};
-  item.totalNum = item.preisNum * item.qtyNum;
-  BASKET_STATE.items[idx] = item;
-  return item;
+  const existing = BASKET_STATE.items[idx];
+  const raw = Number.isFinite(qtyValue) ? qtyValue : (qtyValue ?? '');
+  const rawStr = typeof raw === 'number' ? String(raw) : String(raw).trim();
+
+  if(rawStr === ''){
+    if(options?.commit === false){
+      return {status:'empty', item:{...existing, qtyNum:NaN, totalNum:NaN}};
+    }
+    return {status:'empty', item:existing};
+  }
+
+  const qtyNum = Number.isFinite(qtyValue) ? qtyValue : parseQty(rawStr);
+  if(!Number.isFinite(qtyNum)){
+    return {status:'invalid', item:existing};
+  }
+
+  const nextItem = {...existing, qtyNum};
+  nextItem.totalNum = nextItem.preisNum * nextItem.qtyNum;
+
+  if(options?.commit === false){
+    return {status:'preview', item:nextItem};
+  }
+
+  if(qtyNum === 0){
+    BASKET_STATE.items.splice(idx,1);
+    return {status:'removed', item:existing};
+  }
+
+  BASKET_STATE.items[idx] = nextItem;
+  return {status:'updated', item:nextItem};
 }
+
+const updateLineQty = setLineQty;
 
 function removeLine(lineId){
   const idx = BASKET_STATE.items.findIndex(item=>item.lineId===lineId);
@@ -930,33 +955,211 @@ function updateDelta(sum){
   lastSum = sum;
 }
 
+function getLineTotalValue(item){
+  if(!item) return 0;
+  if(Number.isFinite(item.totalNum)) return item.totalNum;
+  if(Number.isFinite(item.preisNum) && Number.isFinite(item.qtyNum)){
+    return item.preisNum * item.qtyNum;
+  }
+  return 0;
+}
+
+function computeBasketSum(){
+  return BASKET_STATE.items.reduce((acc,it)=>acc + getLineTotalValue(it),0);
+}
+
+function formatQtyInputValue(qty){
+  return Number.isFinite(qty) ? String(qty) : '';
+}
+
+function updateLineTotalCell(cell, totalNum){
+  if(!cell) return;
+  if(!Number.isFinite(totalNum) || totalNum === 0){
+    if(Number.isFinite(totalNum) && totalNum === 0){
+      cell.textContent = fmtPrice(totalNum);
+    }else{
+      cell.textContent = '–';
+    }
+    cell.classList.remove('neg');
+    cell.dataset.total = '0';
+    return;
+  }
+  cell.textContent = fmtPrice(totalNum);
+  cell.classList.toggle('neg', totalNum<0);
+  cell.dataset.total = String(totalNum);
+}
+
+function updateSummaryDisplay(sum, count, sumCell, commitDelta){
+  if(sumCell){
+    sumCell.textContent = fmtPrice(sum);
+    sumCell.classList.toggle('neg', sum<0);
+    sumCell.dataset.sum = String(sum);
+  }
+  $('#selCount').textContent = String(count);
+  $('#selSum').textContent = sum.toLocaleString('de-AT',{style:'currency',currency:'EUR'});
+  if(commitDelta){
+    updateDelta(sum);
+  }
+}
+
 function renderSummary(feedback){
   const wrap=$('#summaryTableWrap');
+  if(!wrap) return;
   const items=getBasketItems().sort((a,b)=>{
     const byId=String(a.id).localeCompare(String(b.id),'de',{numeric:true,sensitivity:'base'});
     if(byId!==0) return byId;
     return String(a.lineId).localeCompare(String(b.lineId),'de',{numeric:true,sensitivity:'base'});
   });
+
   let sum=0;
-  const rows=items.map(it=>{ const totalNum=Number.isFinite(it.totalNum)?it.totalNum:0; sum+=totalNum;
+  const rows=items.map(it=>{
+    const totalNum = getLineTotalValue(it);
+    if(Number.isFinite(totalNum)) sum+=totalNum;
     const kurzHTML = linkify(escapeHtml(it.kurz||''));
     const beschrHTML = linkify(escapeHtml(it.beschreibung||''));
-    return `<tr>
+    const qtyVal = formatQtyInputValue(it.qtyNum);
+    const totalClass = Number.isFinite(totalNum) && totalNum<0 ? ' neg' : '';
+    const totalText = Number.isFinite(totalNum) ? fmtPrice(totalNum) : '–';
+    return `<tr data-line-id="${escapeHtml(it.lineId)}" data-price="${Number.isFinite(it.preisNum)?String(it.preisNum):'0'}">
       <td style="width:120px">${escapeHtml(it.id)}</td>
       <td style="min-width:220px"><div><b>${kurzHTML}</b></div><div class="desc">${beschrHTML}</div></td>
       <td class="right" style="width:120px">${fmtPrice(it.preisNum)}</td>
-      <td class="right" style="width:90px">${fmtQty(it.qtyNum)} ${escapeHtml(it.eh)}</td>
-      <td class="right${totalNum<0?' neg':''}" style="width:140px">${fmtPrice(totalNum)}</td>
-    </tr>`; }).join('');
+      <td class="right" style="width:140px">
+        <div class="qty-editor">
+          <input type="number" step="0.01" inputmode="decimal" class="qty-input" data-line-id="${escapeHtml(it.lineId)}" value="${escapeHtml(qtyVal)}" />
+          <span class="qty-unit" data-role="qty-unit">${escapeHtml(it.eh||'')}</span>
+        </div>
+      </td>
+      <td class="right${totalClass}" data-role="line-total" data-line-id="${escapeHtml(it.lineId)}" data-total="${Number.isFinite(totalNum)?String(totalNum):'0'}">${totalText}</td>
+      <td class="action" style="width:48px">
+        <button type="button" class="remove-line" data-line-id="${escapeHtml(it.lineId)}" title="Position entfernen" aria-label="Position entfernen">✖</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const bodyHTML = rows || '<tr class="empty"><td colspan="6" class="muted">Keine Positionen markiert.</td></tr>';
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>Art.Nr.</th><th>Bezeichnung (Kurztext + Beschreibung)</th><th class="right">EH-Preis</th><th class="right">Menge</th><th class="right">Gesamt</th></tr></thead>
-      <tbody>${rows||''}</tbody>
-      <tfoot><tr class="tot"><td colspan="4" class="right">Summe</td><td class="right${sum<0?' neg':''}">${fmtPrice(sum)}</td></tr></tfoot>
+      <thead><tr><th>Art.Nr.</th><th>Bezeichnung (Kurztext + Beschreibung)</th><th class="right">EH-Preis</th><th class="right">Menge</th><th class="right">Gesamt</th><th class="center">&nbsp;</th></tr></thead>
+      <tbody>${bodyHTML}</tbody>
+      <tfoot><tr class="tot"><td colspan="5" class="right">Summe</td><td class="right" data-role="summary-total" data-sum="${String(sum)}">${fmtPrice(sum)}</td></tr></tfoot>
     </table>`;
-  $('#selCount').textContent=String(items.length);
-  $('#selSum').textContent=sum.toLocaleString('de-AT',{style:'currency',currency:'EUR'});
-  if(feedback){ pulseHead(); showToast(); updateDelta(sum); setStatus('ok','Bereit.',1500); }
+
+  const sumCell = wrap.querySelector('[data-role="summary-total"]');
+  updateSummaryDisplay(sum, items.length, sumCell, !!feedback);
+
+  attachSummaryInteractions(wrap);
+
+  if(feedback){ pulseHead(); showToast(); setStatus('ok','Bereit.',1500); }
+}
+
+function attachSummaryInteractions(wrap){
+  const sumCell = wrap.querySelector('[data-role="summary-total"]');
+  const inputs = wrap.querySelectorAll('input.qty-input');
+
+  const recomputeAndDisplay = (commit=false)=>{
+    const sum = computeBasketSum();
+    updateSummaryDisplay(sum, BASKET_STATE.items.length, sumCell, commit);
+  };
+
+  inputs.forEach(inp=>{
+    const lineId = inp.dataset.lineId;
+    const row = inp.closest('tr');
+    const totalCell = row?.querySelector('[data-role="line-total"]');
+
+    inp.addEventListener('input',()=>{
+      if(!lineId) return;
+      const existing = BASKET_STATE.items.find(it=>it.lineId===lineId);
+      if(!existing){ return; }
+      const baseTotal = getLineTotalValue(existing);
+      const preview = setLineQty(lineId, inp.value, {commit:false});
+      if(preview.status === 'missing'){
+        renderSummary(false);
+        return;
+      }
+      if(preview.status === 'invalid'){
+        row?.classList.add('invalid');
+        inp.classList.add('invalid');
+        return;
+      }
+
+      row?.classList.remove('invalid');
+      inp.classList.remove('invalid');
+
+      if(preview.status === 'preview' && preview.item){
+        updateLineTotalCell(totalCell, preview.item.totalNum);
+        const previewSum = computeBasketSum() - baseTotal + getLineTotalValue(preview.item);
+        updateSummaryDisplay(previewSum, BASKET_STATE.items.length, sumCell, false);
+      }
+      else if(preview.status === 'empty'){
+        updateLineTotalCell(totalCell, NaN);
+        const previewSum = computeBasketSum() - baseTotal;
+        updateSummaryDisplay(previewSum, BASKET_STATE.items.length, sumCell, false);
+      }
+      else{
+        updateLineTotalCell(totalCell, baseTotal);
+        recomputeAndDisplay(false);
+      }
+    });
+
+    inp.addEventListener('change',()=>{
+      if(!lineId) return;
+      const before = BASKET_STATE.items.find(it=>it.lineId===lineId);
+      const result = setLineQty(lineId, inp.value);
+
+      if(result.status === 'removed'){
+        recomputeAndDisplay(true);
+        renderSummary(false);
+        return;
+      }
+
+      if(result.status === 'missing'){
+        renderSummary(false);
+        return;
+      }
+
+      if(result.status === 'invalid'){
+        row?.classList.add('invalid');
+        inp.classList.add('invalid');
+        if(before){
+          inp.value = formatQtyInputValue(before.qtyNum);
+          updateLineTotalCell(totalCell, getLineTotalValue(before));
+        }
+        setStatus('warn','Ungültige Menge.',2500);
+        recomputeAndDisplay(false);
+        return;
+      }
+
+      row?.classList.remove('invalid');
+      inp.classList.remove('invalid');
+
+      if(result.status === 'updated' && result.item){
+        inp.value = formatQtyInputValue(result.item.qtyNum);
+        updateLineTotalCell(totalCell, result.item.totalNum);
+        recomputeAndDisplay(true);
+      }
+      else if(result.status === 'empty' && before){
+        inp.value = formatQtyInputValue(before.qtyNum);
+        updateLineTotalCell(totalCell, getLineTotalValue(before));
+        recomputeAndDisplay(false);
+      }
+      else{
+        updateLineTotalCell(totalCell, getLineTotalValue(BASKET_STATE.items.find(it=>it.lineId===lineId)));
+        recomputeAndDisplay(false);
+      }
+    });
+  });
+
+  wrap.querySelectorAll('button.remove-line').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const lineId = btn.dataset.lineId;
+      if(!lineId) return;
+      if(removeLine(lineId)){
+        recomputeAndDisplay(true);
+        renderSummary(false);
+      }
+    });
+  });
 }
 
 function applyVersionInfo(){
