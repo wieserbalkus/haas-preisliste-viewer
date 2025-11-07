@@ -1,5 +1,5 @@
 /* ================= Basis-Einstellungen ================ */
-const APP_VERSION = 'V1.0.0';
+const APP_VERSION = 'V1.1.0';
 const APP_BUILD_DATE = '2024-06-05';
 const DEFAULT_FILE = 'Artikelpreisliste.xlsx';
 const DEFAULT_FILE_PATH = `./data/${DEFAULT_FILE}`;
@@ -18,6 +18,7 @@ function fmtPrice(v){
     : (v??'');
 }
 function debounced(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); } }
+let toastTimer=null;
 let statusTimer=null;
 function setStatus(kind, html, ttl=3000){
   const el = $('#hint');
@@ -25,6 +26,14 @@ function setStatus(kind, html, ttl=3000){
   el.dataset.status = kind; el.innerHTML = html || '';
   if(statusTimer){ clearTimeout(statusTimer); }
   statusTimer = setTimeout(()=>{ el.textContent=''; el.removeAttribute('data-status'); }, ttl);
+}
+
+function triggerUpdatedBadge(){
+  const toast = $('#toast');
+  if(!toast) return;
+  toast.classList.add('show');
+  if(toastTimer){ clearTimeout(toastTimer); }
+  toastTimer = setTimeout(()=>toast.classList.remove('show'), 1600);
 }
 function isSonderEditable(id){ const s=String(id||'').replace(/\D/g,''); return /(?:98|99)$/.test(s); }
 
@@ -195,6 +204,7 @@ function addManualTopItem(){
   BASKET_STATE.items.unshift(manualItem);
   setDrawer(true);
   renderSummary(false, {focusLineId: manualItem.lineId, focusField: 'title'});
+  triggerUpdatedBadge();
   setStatus('ok','Manuelle Position hinzugefügt.',2000);
   return manualItem;
 }
@@ -272,6 +282,7 @@ function setAltFlag(lineId, checked){
   }
   const sums = computeBasketSums();
   updateSummaryDisplay(sums, BASKET_STATE.items.length, true);
+  triggerUpdatedBadge();
 }
 
 function clearBasket(){
@@ -676,11 +687,13 @@ function trChild(c, f){
     if(added.removed){
       showAddButtonFeedback('removed');
       renderSummary(true);
+      triggerUpdatedBadge();
       setStatus('ok','Bereit.',1500);
       return;
     }
     showAddButtonFeedback('added');
     renderSummary(true);
+    triggerUpdatedBadge();
     setStatus('ok','Bereit.',1500);
   });
 
@@ -1079,7 +1092,6 @@ document.addEventListener('keydown',(e)=>{
 
 /* Zusammenfassung + Feedback */
 let lastSum = 0;
-function showToast(){ const t=$('#toast'); t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 1100); }
 function pulseHead(){ const h=$('#drawerHead'); h.classList.add('pulse'); setTimeout(()=>h.classList.remove('pulse'), 800); }
 function updateDelta(sum){
   const el=$('#selSum'); el.classList.remove('sum-up','sum-down');
@@ -1238,7 +1250,7 @@ function renderSummary(feedback, options={}){
       }
     }
     const unitEditor = isManual
-      ? `<input type="text" class="unit-input" data-line-id="${escapeHtml(it.lineId)}" data-field="unit" value="${escapeHtml(unitValue)}" readonly aria-readonly="true" tabindex="-1" />`
+      ? `<span class="unit-label" data-role="unit-label">${escapeHtml(unitValue)}</span>`
       : `<span class="qty-unit" data-role="qty-unit">${escapeHtml(unitValue)}</span>`;
     const rowClasses = ['basket-row'];
     if(isManual){ rowClasses.push('manual-row'); }
@@ -1282,7 +1294,7 @@ function renderSummary(feedback, options={}){
     focusSummaryEditor(options.focusLineId, options.focusField);
   }
 
-  if(feedback){ pulseHead(); showToast(); setStatus('ok','Bereit.',1500); }
+  if(feedback){ pulseHead(); setStatus('ok','Bereit.',1500); }
 }
 
 function attachSummaryInteractions(wrap){
@@ -1290,7 +1302,6 @@ function attachSummaryInteractions(wrap){
   const priceInputs = wrap.querySelectorAll('input.price-input');
   const titleInputs = wrap.querySelectorAll('input.manual-title');
   const descInputs = wrap.querySelectorAll('textarea.manual-desc');
-  const unitInputs = wrap.querySelectorAll('input.unit-input');
 
   const recomputeAndDisplay = (commit=false)=>{
     const sums = computeBasketSums();
@@ -1370,6 +1381,7 @@ function attachSummaryInteractions(wrap){
       if(result.status === 'removed'){
         recomputeAndDisplay(true);
         renderSummary(false);
+        triggerUpdatedBadge();
         return;
       }
 
@@ -1397,6 +1409,7 @@ function attachSummaryInteractions(wrap){
         inp.value = formatQtyInputValue(result.item.qtyNum);
         updateLineTotalCell(totalCell, result.item.totalNum, result.item.isAlternative);
         recomputeAndDisplay(true);
+        triggerUpdatedBadge();
       }
       else if(result.status === 'empty' && before){
         inp.value = formatQtyInputValue(before.qtyNum);
@@ -1474,6 +1487,7 @@ function attachSummaryInteractions(wrap){
       setRowInvalid(row,'priceInvalid',false);
       setInputInvalid(inp,false);
       recomputeAndDisplay(true);
+      triggerUpdatedBadge();
     });
   });
 
@@ -1497,15 +1511,6 @@ function attachSummaryInteractions(wrap){
     });
   });
 
-  unitInputs.forEach(inp=>{
-    if(inp.readOnly || inp.disabled) return;
-    const lineId = inp.dataset.lineId;
-    if(!lineId) return;
-    inp.addEventListener('input',()=>{
-      const existing = findBasketItem(lineId);
-      if(existing){ existing.eh = inp.value; }
-    });
-  });
 
   const altToggles = wrap.querySelectorAll('input.alt-toggle-basket');
   altToggles.forEach(toggle=>{
@@ -1523,6 +1528,7 @@ function attachSummaryInteractions(wrap){
       if(removeLine(lineId)){
         recomputeAndDisplay(true);
         renderSummary(false);
+        triggerUpdatedBadge();
       }
     });
   });

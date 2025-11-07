@@ -184,12 +184,14 @@ th.center,td.center{text-align:center}
 
 .control-cell{vertical-align:top;text-align:right}
 .qty-action{display:flex;align-items:flex-start;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.qty-action>*{align-self:flex-start}
+.qty-action .alt-flag{margin-top:0}
 .qty-action .qty{flex:0 0 72px}
 .qty-action .btn-plus{flex:0 0 auto}
 @media (min-width:1200px){
   .qty-action{flex-wrap:nowrap}
 }
-.alt-flag,.alt-flag-basket{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;color:var(--muted);cursor:pointer}
+.alt-flag,.alt-flag-basket{display:inline-flex;align-items:flex-start;justify-content:center;width:28px;height:28px;border-radius:6px;color:var(--muted);cursor:pointer}
 .alt-flag input,.alt-flag-basket input{width:18px;height:18px;accent-color:var(--accent)}
 .btn-plus{min-width:28px;height:28px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;line-height:1;display:inline-flex;align-items:center;justify-content:center;padding:0 10px;gap:4px;font-size:.875rem;white-space:nowrap;transition:background-color .2s ease,color .2s ease,border-color .2s ease}
 .btn-plus:hover{background:#fff9f0;border-color:#f59e0b}
@@ -228,12 +230,13 @@ th.center,td.center{text-align:center}
 .summary td.artnr-cell{width:120px}
 .summary td.desc-cell{min-width:220px}
 .summary td.price-cell,.summary td.qty-cell,.summary td.unit-cell,.summary td.alt-cell{vertical-align:top}
+.summary td.alt-cell{padding-top:6px}
 .summary td.qty-cell{text-align:right}
 .summary td.unit-cell{text-align:left}
 .summary td.alt-cell{text-align:center;width:60px}
 .summary td.alt-cell .alt-flag-basket{justify-content:center}
 .summary tr.alt-item td{font-style:italic;opacity:.92}
-.summary tr.alt-item input,.summary tr.alt-item textarea,.summary tr.alt-item .price-editor,.summary tr.alt-item .price-editor input,.summary tr.alt-item .unit-input,.summary tr.alt-item .qty-unit{font-style:normal;opacity:1}
+.summary tr.alt-item input,.summary tr.alt-item textarea,.summary tr.alt-item .price-editor,.summary tr.alt-item .price-editor input,.summary tr.alt-item .unit-label,.summary tr.alt-item .qty-unit{font-style:normal;opacity:1}
 .summary tr.alt-item .manual-editor,.summary tr.alt-item .manual-editor input,.summary tr.alt-item .manual-editor textarea{font-style:normal}
 .summary td.alt-total{font-style:italic;opacity:.85}
 .summary tfoot .total-main .total-cell{font-weight:700}
@@ -252,10 +255,8 @@ th.center,td.center{text-align:center}
 .summary .price-input{width:100%;text-align:right;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;background:#fff;font:inherit;color:inherit}
 .summary .price-input:focus{outline:2px solid #f59e0b22;border-color:#f59e0b}
 .summary .price-input.invalid{border-color:#b91c1c}
-.summary .unit-cell .unit-input{min-width:70px;text-align:left;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;background:#fff;font:inherit;color:inherit}
-.summary .unit-input:focus{outline:2px solid #f59e0b22;border-color:#f59e0b}
-.summary .unit-input.invalid{border-color:#b91c1c}
-.summary .qty-unit{min-width:42px;text-align:left;font-size:12px;color:var(--muted)}
+.summary .qty-unit,.summary .unit-label{min-width:42px;text-align:left;font-size:12px;color:var(--muted)}
+.summary .unit-label{display:inline-block;padding-top:6px}
 .summary td.action{text-align:center}
 .summary .remove-line{width:32px;height:32px;border:1px solid #e6e6e3;border-radius:8px;background:#fff;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
 .summary .remove-line:hover{background:#fff1f2;border-color:#ef4444;color:#b91c1c}
