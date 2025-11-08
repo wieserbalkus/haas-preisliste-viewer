@@ -24,20 +24,16 @@
   body[data-print-mode="list"] .print-portal .col-beschr,
   body[data-print-mode="list"] .print-portal .col-hinweis{white-space:normal;overflow-wrap:anywhere;hyphens:auto;line-height:1.3}
 
-  /* HIER Spaltenbreiten anpassen: .col-artnr, .col-kurz, .col-beschr, .col-eh, .col-ehinfo, .col-preis, .col-menge, .col-gesamt, .col-hinweis */
+  /* HIER Spaltenbreiten anpassen: .col-artnr, .col-kurz, .col-beschr, .col-eh, .col-ehinfo, .col-preis, .col-hinweis */
   /* Hinweis: Breiten sollten zusammen ca. 100 % ergeben; Zahlen-Spalten können rechtsbündig/tabellarisch ausgerichtet werden. */
-  body[data-print-mode="list"] .print-portal .col-artnr{width:7%}
-  body[data-print-mode="list"] .print-portal .col-kurz{width:12%}
-  body[data-print-mode="list"] .print-portal .col-beschr{width:34%}
-  body[data-print-mode="list"] .print-portal .col-eh{width:6%}
-  body[data-print-mode="list"] .print-portal .col-ehinfo{width:8%}
-  body[data-print-mode="list"] .print-portal .col-preis{width:10%}
-  body[data-print-mode="list"] .print-portal .col-menge{width:7%}
-  body[data-print-mode="list"] .print-portal .col-gesamt{width:12%}
-  body[data-print-mode="list"] .print-portal .col-hinweis{width:4%}
-  body[data-print-mode="list"] .print-portal .col-preis,
-  body[data-print-mode="list"] .print-portal .col-menge,
-  body[data-print-mode="list"] .print-portal .col-gesamt{text-align:right;font-variant-numeric:tabular-nums}
+  body[data-print-mode="list"] .print-portal .col-artnr{width:5%}
+  body[data-print-mode="list"] .print-portal .col-kurz{width:20%}
+  body[data-print-mode="list"] .print-portal .col-beschr{width:40%}
+  body[data-print-mode="list"] .print-portal .col-eh{width:5%}
+  body[data-print-mode="list"] .print-portal .col-ehinfo{width:5%}
+  body[data-print-mode="list"] .print-portal .col-preis{width:5%}
+  body[data-print-mode="list"] .print-portal .col-hinweis{width:20%}
+  body[data-print-mode="list"] .print-portal .col-preis{text-align:right;font-variant-numeric:tabular-nums}
 
   /* Optional: Seitenzahlen unten aktivieren über @page { @bottom-center { content: counter(page) " / " counter(pages); } } */
 }
