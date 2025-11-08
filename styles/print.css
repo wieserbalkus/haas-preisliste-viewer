@@ -33,7 +33,9 @@
   body[data-print-mode="list"] .print-portal .col-ehinfo{width:5%}
   body[data-print-mode="list"] .print-portal .col-preis{width:5%}
   body[data-print-mode="list"] .print-portal .col-hinweis{width:20%}
-  body[data-print-mode="list"] .print-portal .col-preis{text-align:right;font-variant-numeric:tabular-nums}
+  body[data-print-mode="list"] .print-portal th.col-preis,
+  body[data-print-mode="list"] .print-portal td.col-preis{text-align:right;font-variant-numeric:tabular-nums}
+  body[data-print-mode="list"] .print-portal td.col-preis{white-space:nowrap}
 
   /* Optional: Seitenzahlen unten aktivieren über @page { @bottom-center { content: counter(page) " / " counter(pages); } } */
 }
