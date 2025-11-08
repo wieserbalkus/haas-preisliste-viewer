@@ -1,5 +1,5 @@
 /* ================= Basis-Einstellungen ================ */
-const APP_VERSION = 'V1.0.0';
+const APP_VERSION = 'V1.1.0';
 const APP_BUILD_DATE = '2024-06-05';
 const DEFAULT_FILE = 'Artikelpreisliste.xlsx';
 const DEFAULT_FILE_PATH = `./data/${DEFAULT_FILE}`;
@@ -18,6 +18,7 @@ function fmtPrice(v){
     : (v??'');
 }
 function debounced(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); } }
+let toastTimer=null;
 let statusTimer=null;
 function setStatus(kind, html, ttl=3000){
   const el = $('#hint');
@@ -25,6 +26,14 @@ function setStatus(kind, html, ttl=3000){
   el.dataset.status = kind; el.innerHTML = html || '';
   if(statusTimer){ clearTimeout(statusTimer); }
   statusTimer = setTimeout(()=>{ el.textContent=''; el.removeAttribute('data-status'); }, ttl);
+}
+
+function triggerUpdatedBadge(){
+  const toast = $('#toast');
+  if(!toast) return;
+  toast.classList.add('show');
+  if(toastTimer){ clearTimeout(toastTimer); }
+  toastTimer = setTimeout(()=>toast.classList.remove('show'), 1600);
 }
 function isSonderEditable(id){ const s=String(id||'').replace(/\D/g,''); return /(?:98|99)$/.test(s); }
 
@@ -127,9 +136,192 @@ function hlAndLink(text, terms){
 let GROUPS=[], LAST_WB=null;
 let DRAWER_OPEN = false;
 let CURRENT_SHEET = '';
-const SELECTED = new Map();
+const BASKET_STATE = {
+  items: [],
+  mergeSameItems: false,
+};
+const MANUAL_DEFAULT_ARTNR = '0000';
+const MANUAL_DEFAULT_TITLE = 'Basispreis Haus';
+const MANUAL_DEFAULT_UNIT = 'pau';
+const MANUAL_DESCRIPTION_PLACEHOLDER = 'Ausbaustufe, Fensterelemente, etc.';
 let GROUP_SWITCH_ANIM = Promise.resolve();
 const ROW_STATES = new Map();
+let BASKET_LINE_COUNTER = 1;
+
+function nextLineId(){
+  return `ln_${BASKET_LINE_COUNTER++}`;
+}
+
+function cloneBasketItem(payload, options={}){
+  if(!payload || !payload.id){ return null; }
+  const qtyRaw = Number.isFinite(payload.qtyNum) ? payload.qtyNum : parseQty(payload.qtyNum);
+  if(!Number.isFinite(qtyRaw) || qtyRaw === 0){ return null; }
+  const preisRaw = Number.isFinite(payload.preisNum) ? payload.preisNum : parseEuro(payload.preisNum);
+  const item = {
+    lineId: options.forceNewLineId ? nextLineId() : (payload.lineId || nextLineId()),
+    id: payload.id,
+    kurz: payload.kurz ?? '',
+    beschreibung: payload.beschreibung ?? '',
+    eh: payload.eh ?? '',
+    preisNum: Number.isFinite(preisRaw) ? preisRaw : 0,
+    qtyNum: qtyRaw,
+    isAlternative: !!payload.isAlternative,
+  };
+  item.totalNum = item.preisNum * item.qtyNum;
+  return item;
+}
+
+function addToBasket(payload){
+  const item = cloneBasketItem(payload, {forceNewLineId:true});
+  if(!item){ return null; }
+  BASKET_STATE.items.push(item);
+  return item;
+}
+
+function createManualBasketItem(){
+  return {
+    lineId: nextLineId(),
+    id: MANUAL_DEFAULT_ARTNR,
+    kurz: MANUAL_DEFAULT_TITLE,
+    beschreibung: '',
+    eh: MANUAL_DEFAULT_UNIT,
+    preisNum: 0,
+    qtyNum: 0,
+    totalNum: 0,
+    isManual: true,
+    isAlternative: false,
+  };
+}
+
+function displayArtnr(item){
+  if(!item) return '';
+  const id = item.id ?? '';
+  return item.isAlternative ? `A-${id}` : id;
+}
+
+function addManualTopItem(){
+  const manualItem = createManualBasketItem();
+  BASKET_STATE.items.unshift(manualItem);
+  setDrawer(true);
+  renderSummary(false, {focusLineId: manualItem.lineId, focusField: 'title'});
+  triggerUpdatedBadge();
+  setStatus('ok','Manuelle Position hinzugefügt.',2000);
+  return manualItem;
+}
+
+function setLineQty(lineId, qtyValue, options){
+  const idx = BASKET_STATE.items.findIndex(item=>item.lineId===lineId);
+  if(idx<0){
+    return {status:'missing', item:null};
+  }
+  const existing = BASKET_STATE.items[idx];
+  const raw = Number.isFinite(qtyValue) ? qtyValue : (qtyValue ?? '');
+  const rawStr = typeof raw === 'number' ? String(raw) : String(raw).trim();
+
+  if(rawStr === ''){
+    if(options?.commit === false){
+      return {status:'empty', item:{...existing, qtyNum:NaN, totalNum:NaN}};
+    }
+    return {status:'empty', item:existing};
+  }
+
+  const qtyNum = Number.isFinite(qtyValue) ? qtyValue : parseQty(rawStr);
+  if(!Number.isFinite(qtyNum)){
+    return {status:'invalid', item:existing};
+  }
+
+  const nextItem = {...existing, qtyNum};
+  nextItem.totalNum = nextItem.preisNum * nextItem.qtyNum;
+
+  if(options?.commit === false){
+    return {status:'preview', item:nextItem};
+  }
+
+  if(qtyNum === 0){
+    BASKET_STATE.items.splice(idx,1);
+    return {status:'removed', item:existing};
+  }
+
+  BASKET_STATE.items[idx] = nextItem;
+  return {status:'updated', item:nextItem};
+}
+
+const updateLineQty = setLineQty;
+
+function removeLine(lineId){
+  const idx = BASKET_STATE.items.findIndex(item=>item.lineId===lineId);
+  if(idx<0) return false;
+  BASKET_STATE.items.splice(idx,1);
+  return true;
+}
+
+function findBasketItem(lineId){
+  return BASKET_STATE.items.find(item=>item.lineId===lineId);
+}
+
+function setAltFlag(lineId, checked){
+  const item = findBasketItem(lineId);
+  if(!item) return;
+  const next = !!checked;
+  if(item.isAlternative === next) return;
+  item.isAlternative = next;
+  const wrap = $('#summaryTableWrap');
+  if(wrap){
+    const safeId = (typeof CSS!=='undefined' && CSS && typeof CSS.escape==='function') ? CSS.escape(lineId) : lineId.replace(/"/g,'\\"');
+    const row = wrap.querySelector(`[data-line-id="${safeId}"]`);
+    if(row){
+      row.dataset.alt = next ? 'true' : 'false';
+      row.classList.toggle('alt-item', next);
+      const artCell = row.querySelector('[data-role="artnr"]');
+      if(artCell){ artCell.textContent = displayArtnr(item); }
+      const totalCell = row.querySelector('[data-role="line-total"]');
+      if(totalCell){ updateLineTotalCell(totalCell, getLineTotalValue(item), next); }
+    }
+    const toggle = wrap.querySelector(`input.alt-toggle-basket[data-line-id="${safeId}"]`);
+    if(toggle){ toggle.checked = next; }
+  }
+  const sums = computeBasketSums();
+  updateSummaryDisplay(sums, BASKET_STATE.items.length, true);
+  triggerUpdatedBadge();
+}
+
+function clearBasket(){
+  BASKET_STATE.items.length = 0;
+  BASKET_LINE_COUNTER = 1;
+}
+
+function getBasketItems(){
+  return BASKET_STATE.items.slice();
+}
+
+function getDisplayOrderedItems(){
+  const items = getBasketItems();
+  if(items.length <= 1){
+    return items;
+  }
+  const positions = new Map();
+  BASKET_STATE.items.forEach((it, idx)=>positions.set(it.lineId, idx));
+  return items.sort((a,b)=>{
+    const aManual = !!a.isManual;
+    const bManual = !!b.isManual;
+    if(aManual !== bManual){
+      return aManual ? -1 : 1;
+    }
+    if(aManual && bManual){
+      const posA = positions.get(a.lineId) ?? 0;
+      const posB = positions.get(b.lineId) ?? 0;
+      return posA - posB;
+    }
+    const byId = String(a.id).localeCompare(String(b.id),'de',{numeric:true,sensitivity:'base'});
+    if(byId !== 0) return byId;
+    return String(a.lineId).localeCompare(String(b.lineId),'de',{numeric:true,sensitivity:'base'});
+  });
+}
+
+function getBasketSize(){
+  return BASKET_STATE.items.length;
+}
+
 const VIRTUAL = {
   items:[],
   container:null,
@@ -306,9 +498,12 @@ function trChild(c, f){
 
   const qtyId=`q_${c.id}`, addBtnId=`add_${c.id}`;
   const qtyValue = state.qty || '';
-  const qtyHTML = `<div class="qty-wrap">
+  const controlsHTML = `<div class="qty-action">
       <input id="${qtyId}" class="qty" type="text" inputmode="decimal" placeholder="0" title="Menge" value="${escapeHtml(qtyValue)}" />
-      <button id="${addBtnId}" type="button" class="addbtn" title="Zur Zusammenfassung hinzufügen">➕</button>
+      <label class="alt-flag" title="Als Alternative markieren">
+        <input type="checkbox" class="alt-toggle" aria-label="Als Alternative markieren" />
+      </label>
+      <button id="${addBtnId}" type="button" class="btn-plus" title="Zur Zusammenfassung hinzufügen">➕</button>
     </div>`;
 
   tr.innerHTML = `
@@ -318,7 +513,7 @@ function trChild(c, f){
     <td>${ehHTML}</td>
     <td>${ehInfoHTML}</td>
     <td class="right" data-sort="${preisNum}">${preisHTML}</td>
-    <td>${qtyHTML}</td>
+    <td class="control-cell">${controlsHTML}</td>
     <td class="right" data-total="0">–</td>
     <td class="desc">${hinweisHTML}</td>`;
 
@@ -329,17 +524,62 @@ function trChild(c, f){
       const field = ta.dataset.field;
       if(field==='kurz'){ state.kurz=ta.value; }
       if(field==='beschreibung'){ state.beschreibung=ta.value; }
-      if(SELECTED.has(c.id)){
-        addOrUpdateSelectedFromRow();
-        renderSummary(true);
-      }
     });
   });
 
-  const qtyInp=tr.querySelector('#'+CSS.escape(qtyId));
+  const qtyInp=tr.querySelector('input.qty');
   const preisInp=tr.querySelector('input[data-field="preis"]');
   const totalCell=tr.querySelector('[data-total]');
-  const addBtn=tr.querySelector('#'+CSS.escape(addBtnId));
+  const addBtn=tr.querySelector('.btn-plus');
+  const altToggle=tr.querySelector('.alt-toggle');
+  let addFeedbackTimer=null;
+  let pendingAddReset=null;
+
+  function resetAddButton(){
+    addBtn.classList.remove('added','removed');
+    addBtn.textContent='➕';
+    addFeedbackTimer=null;
+  }
+
+  function showAddButtonFeedback(kind){
+    if(addFeedbackTimer){
+      clearTimeout(addFeedbackTimer);
+      addFeedbackTimer=null;
+    }
+    if(kind==='removed'){
+      addBtn.classList.remove('added');
+      addBtn.classList.add('removed');
+      addBtn.textContent='entfernt ✖';
+      pendingAddReset=null;
+      addFeedbackTimer=setTimeout(()=>{
+        resetAddButton();
+        addFeedbackTimer=null;
+      },2400);
+      return;
+    }
+    addBtn.classList.remove('removed');
+    addBtn.classList.add('added');
+    addBtn.textContent='✓';
+    const resetToken=Symbol('added-feedback');
+    pendingAddReset={token:resetToken, qtyChanged:false, altChanged:false};
+    addFeedbackTimer=setTimeout(()=>{
+      if(pendingAddReset && pendingAddReset.token===resetToken){
+        if(!pendingAddReset.qtyChanged && qtyInp){
+          qtyInp.value='';
+          qtyInp.placeholder='0';
+          state.qty='';
+          recalcRowTotal();
+        }
+        if(!pendingAddReset.altChanged && altToggle){
+          altToggle.checked=false;
+          altToggle.indeterminate=false;
+        }
+        pendingAddReset=null;
+      }
+      resetAddButton();
+      addFeedbackTimer=null;
+    }, 2500);
+  }
 
   const einheitInp=tr.querySelector('input[data-field="einheit"]');
   const einheitInfoInp=tr.querySelector('input[data-field="einheitInfo"]');
@@ -368,21 +608,19 @@ function trChild(c, f){
     }
   }
 
-  function addOrUpdateSelectedFromRow(){
+  function buildBasketPayload(){
     const q=parseQty(qtyInp?.value??'');
-    if(Number.isNaN(q)||q===0){ return false; }
+    if(Number.isNaN(q)||q===0){ return null; }
     const p=currentPreis();
-    const total=p*q;
-    SELECTED.set(c.id,{
+    return {
       id:c.id,
       kurz:currentKurz(),
       beschreibung:currentBeschr(),
       eh:currentEH(),
       preisNum:p,
       qtyNum:q,
-      totalNum:total
-    });
-    return true;
+      isAlternative: !!altToggle?.checked,
+    };
   }
 
   function recalcRowTotal(){
@@ -391,23 +629,27 @@ function trChild(c, f){
     const q=parseQty(qRaw);
     const p=currentPreis();
     updateTotalCell(q,p);
-    if(SELECTED.has(c.id)){
-      if(Number.isNaN(q)||q===0){
-        SELECTED.delete(c.id);
-        addBtn.classList.remove('added');
-        addBtn.textContent='➕';
-        renderSummary(true);
-      }else{
-        addOrUpdateSelectedFromRow();
-        renderSummary(true);
-      }
-    }
   }
 
   qtyInp?.addEventListener('input',()=>{
     qtyInp.value=qtyInp.value.replace(/[^\d.,-]/g,'').replace(/(?!^)-/g,'');
     state.qty=qtyInp.value;
+    if(pendingAddReset){
+      pendingAddReset.qtyChanged=true;
+    }
     recalcRowTotal();
+  });
+
+  qtyInp?.addEventListener('change',()=>{
+    if(pendingAddReset){
+      pendingAddReset.qtyChanged=true;
+    }
+  });
+
+  altToggle?.addEventListener('change',()=>{
+    if(pendingAddReset){
+      pendingAddReset.altChanged=true;
+    }
   });
 
   if(preisInp){
@@ -423,48 +665,39 @@ function trChild(c, f){
 
   einheitInp?.addEventListener('input',()=>{
     state.einheit=einheitInp.value;
-    if(SELECTED.has(c.id)){
-      addOrUpdateSelectedFromRow();
-      renderSummary(true);
-    }
   });
   einheitInfoInp?.addEventListener('input',()=>{
     state.einheitInfo=einheitInfoInp.value;
   });
 
   addBtn.addEventListener('click',()=>{
-    const already=SELECTED.has(c.id);
-    if(already){
-      SELECTED.delete(c.id);
-      addBtn.classList.remove('added');
-      addBtn.textContent='➕';
-      renderSummary(true);
-      return;
-    }
-    if(addOrUpdateSelectedFromRow()){
-      addBtn.classList.add('added');
-      addBtn.textContent='✔︎';
-      renderSummary(true);
-      setStatus('ok','Bereit.',1500);
-    }else{
+    const payload=buildBasketPayload();
+    if(!payload){
       setStatus('warn','Bitte zuerst eine gültige Menge (≠ 0) eingeben.',3500);
       if(addBtn.animate){
         addBtn.animate([{transform:'scale(1)'},{transform:'scale(1.08)'},{transform:'scale(1)'}],{duration:160});
       }
+      return;
     }
+    const added=addToBasket(payload);
+    if(!added){
+      setStatus('warn','Element konnte nicht hinzugefügt werden.',3000);
+      return;
+    }
+    if(added.removed){
+      showAddButtonFeedback('removed');
+      renderSummary(true);
+      triggerUpdatedBadge();
+      setStatus('ok','Bereit.',1500);
+      return;
+    }
+    showAddButtonFeedback('added');
+    renderSummary(true);
+    triggerUpdatedBadge();
+    setStatus('ok','Bereit.',1500);
   });
 
-  if(SELECTED.has(c.id)){
-    const sel=SELECTED.get(c.id);
-    if(qtyInp) qtyInp.value=String(sel.qtyNum).replace('.',',');
-    if(preisInp && Number.isFinite(sel.preisNum)){
-      const formatted=String(sel.preisNum).replace('.',',');
-      preisInp.value=formatted;
-      state.preis=formatted;
-    }
-    addBtn.classList.add('added');
-    addBtn.textContent='✔︎';
-  }
+  resetAddButton();
 
   recalcRowTotal();
   return tr;
@@ -757,7 +990,7 @@ async function loadFromSelectedSheet(wb){
   ROW_STATES.clear();
   fillGroupFilter();
   render();
-  SELECTED.clear();
+  clearBasket();
   renderSummary(false);
   requestAnimationFrame(()=>{ jumpToTop(); recomputeChromeOffset(); });
 }
@@ -814,7 +1047,7 @@ sheetSel.addEventListener('focus',()=>{ lastSheetValue=sheetSel.value; });
 sheetSel.addEventListener('mousedown',()=>{ lastSheetValue=sheetSel.value; });
 sheetSel.addEventListener('change', async ()=>{
   const hasFilters = ($('#search').value||$('#fA').value||$('#fB').value||$('#fC').value||$('#groupFilter').value);
-  const hasSelection = SELECTED.size>0;
+  const hasSelection = getBasketSize()>0;
   if(hasFilters||hasSelection){
     const ok=confirm('Blatt wechseln? Alle Filter und markierten Positionen werden zurückgesetzt.');
     if(!ok){ sheetSel.value=lastSheetValue??sheetSel.value; return; }
@@ -826,7 +1059,7 @@ $('#reset').addEventListener('click', ()=>{
   if(!confirm('Alle Filter, Mengen und markierten Positionen werden zurückgesetzt. Fortfahren?')) return;
   $('#search').value=$('#fA').value=$('#fB').value=$('#fC').value=''; $('#groupFilter').value='';
   ROW_STATES.clear();
-  render(); SELECTED.clear(); renderSummary(false); setDrawer(false); setStatus('info','Zurückgesetzt.',1500);
+  render(); clearBasket(); renderSummary(false); setDrawer(false); setStatus('info','Zurückgesetzt.',1500);
   requestAnimationFrame(()=>{ jumpToTop(); recomputeChromeOffset(); });
 });
 
@@ -842,13 +1075,23 @@ $('#drawerHead').addEventListener('dblclick',()=>setDrawer(!DRAWER_OPEN));
 document.addEventListener('keydown',(e)=>{ if(e.altKey && (e.key==='o' || e.key==='O')){ e.preventDefault(); setDrawer(!DRAWER_OPEN); } });
 document.addEventListener('keydown',(e)=>{
   if(!e.altKey || !e.shiftKey) return;
-  if(e.key==='h' || e.key==='H'){ e.preventDefault(); triggerListPrint('all'); }
-  else if(e.key==='o' || e.key==='O'){ e.preventDefault(); triggerListPrint('current'); }
+  const key = String(e.key||'').toLowerCase();
+  if(key==='h'){ e.preventDefault(); triggerListPrint('all'); return; }
+  if(key==='o'){ e.preventDefault(); triggerListPrint('current'); return; }
+  if(key==='n'){
+    const target = e.target || document.activeElement;
+    if(target){
+      const tag = target.tagName;
+      const ignore = tag==='INPUT' || tag==='TEXTAREA' || tag==='SELECT' || target.isContentEditable;
+      if(ignore){ return; }
+    }
+    e.preventDefault();
+    addManualTopItem();
+  }
 });
 
 /* Zusammenfassung + Feedback */
 let lastSum = 0;
-function showToast(){ const t=$('#toast'); t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 1100); }
 function pulseHead(){ const h=$('#drawerHead'); h.classList.add('pulse'); setTimeout(()=>h.classList.remove('pulse'), 800); }
 function updateDelta(sum){
   const el=$('#selSum'); el.classList.remove('sum-up','sum-down');
@@ -857,29 +1100,438 @@ function updateDelta(sum){
   lastSum = sum;
 }
 
-function renderSummary(feedback){
+function getLineTotalValue(item){
+  if(!item) return 0;
+  if(Number.isFinite(item.totalNum)) return item.totalNum;
+  if(Number.isFinite(item.preisNum) && Number.isFinite(item.qtyNum)){
+    return item.preisNum * item.qtyNum;
+  }
+  return 0;
+}
+
+function computeBasketSums(){
+  let sumMain = 0;
+  let sumAlt = 0;
+  for(const item of BASKET_STATE.items){
+    const total = getLineTotalValue(item);
+    if(!Number.isFinite(total)){ continue; }
+    if(item?.isAlternative){ sumAlt += total; }
+    else{ sumMain += total; }
+  }
+  return { main: sumMain, alt: sumAlt, total: sumMain + sumAlt };
+}
+
+function computeBasketSum(){
+  const sums = computeBasketSums();
+  return sums.total;
+}
+
+function formatQtyInputValue(qty){
+  return Number.isFinite(qty) ? String(qty) : '';
+}
+
+function formatPriceInputValue(price){
+  return Number.isFinite(price) ? String(price) : '';
+}
+
+function formatLineTotalDisplay(totalNum, isAlternative){
+  let text = '–';
+  let dataset = '0';
+  let isNegative = false;
+  if(Number.isFinite(totalNum)){
+    text = fmtPrice(totalNum);
+    dataset = String(totalNum);
+    isNegative = totalNum < 0;
+    if(totalNum === 0){
+      text = fmtPrice(0);
+    }
+  }
+  if(isAlternative){
+    text = `(${text})`;
+  }
+  return { text, dataset, isNegative, isAlternative: !!isAlternative };
+}
+
+function updateLineTotalCell(cell, totalNum, isAlternative){
+  if(!cell) return;
+  const { text, dataset, isNegative, isAlternative: alt } = formatLineTotalDisplay(totalNum, isAlternative);
+  cell.textContent = text;
+  cell.dataset.total = dataset;
+  cell.classList.toggle('neg', isNegative);
+  cell.classList.toggle('alt-total', alt);
+}
+
+function updateSummaryDisplay(sums, count, commitDelta){
+  const total = sums?.total ?? 0;
+  const sumMain = sums?.main ?? 0;
+  const sumAlt = sums?.alt ?? 0;
+  $('#selCount').textContent = String(count);
+  const selSumEl = $('#selSum');
+  if(selSumEl){
+    selSumEl.textContent = total.toLocaleString('de-AT',{style:'currency',currency:'EUR'});
+  }
+  const sumMainEl = document.getElementById('sum-main');
+  if(sumMainEl){
+    sumMainEl.textContent = fmtPrice(sumMain);
+    sumMainEl.dataset.sum = String(sumMain);
+    sumMainEl.classList.toggle('neg', sumMain<0);
+  }
+  const sumAltEl = document.getElementById('sum-alt');
+  if(sumAltEl){
+    const altText = fmtPrice(sumAlt);
+    sumAltEl.textContent = `(${altText})`;
+    sumAltEl.dataset.sum = String(sumAlt);
+    sumAltEl.classList.toggle('neg', sumAlt<0);
+  }
+  if(commitDelta){
+    updateDelta(total);
+  }
+}
+
+function focusSummaryEditor(lineId, field){
+  if(!lineId) return;
+  const wrap = $('#summaryTableWrap');
+  if(!wrap) return;
+  const safeId = (typeof CSS!=='undefined' && CSS && typeof CSS.escape==='function') ? CSS.escape(lineId) : lineId.replace(/"/g,'\\"');
+  const selectors = [];
+  if(field){
+    selectors.push(`[data-line-id="${safeId}"][data-field="${field}"]`);
+  }
+  selectors.push(`[data-line-id="${safeId}"] input`, `[data-line-id="${safeId}"] textarea`);
+  let target=null;
+  for(const sel of selectors){
+    const el = wrap.querySelector(sel);
+    if(el){ target=el; break; }
+  }
+  if(target){
+    target.focus();
+    if(typeof target.select==='function'){ try{ target.select(); }catch{} }
+  }
+}
+
+function renderSummary(feedback, options={}){
   const wrap=$('#summaryTableWrap');
-  const items=[...SELECTED.values()].sort((a,b)=> String(a.id).localeCompare(String(b.id),'de',{numeric:true,sensitivity:'base'}));
-  let sum=0;
-  const rows=items.map(it=>{ sum+=it.totalNum;
+  if(!wrap) return;
+  const items=getDisplayOrderedItems();
+
+  let sumMain=0;
+  let sumAlt=0;
+  const rows=items.map(it=>{
+    const totalNum = getLineTotalValue(it);
+    const isManual = !!it.isManual;
+    const isAlternative = !!it.isAlternative;
+    if(Number.isFinite(totalNum)){
+      if(isAlternative){ sumAlt += totalNum; }
+      else{ sumMain += totalNum; }
+    }
     const kurzHTML = linkify(escapeHtml(it.kurz||''));
     const beschrHTML = linkify(escapeHtml(it.beschreibung||''));
-    return `<tr>
-      <td style="width:120px">${escapeHtml(it.id)}</td>
-      <td style="min-width:220px"><div><b>${kurzHTML}</b></div><div class="desc">${beschrHTML}</div></td>
-      <td class="right" style="width:120px">${fmtPrice(it.preisNum)}</td>
-      <td class="right" style="width:90px">${fmtQty(it.qtyNum)} ${escapeHtml(it.eh)}</td>
-      <td class="right${it.totalNum<0?' neg':''}" style="width:140px">${fmtPrice(it.totalNum)}</td>
-    </tr>`; }).join('');
+    const qtyVal = formatQtyInputValue(it.qtyNum);
+    const totalInfo = formatLineTotalDisplay(totalNum, isAlternative);
+    const totalClasses = ['right'];
+    if(totalInfo.isNegative){ totalClasses.push('neg'); }
+    if(isAlternative){ totalClasses.push('alt-total'); }
+    const manualEditor = isManual
+      ? `<div class="manual-editor">
+          <input type="text" class="manual-title" data-line-id="${escapeHtml(it.lineId)}" data-field="title" value="${escapeHtml(it.kurz||'')}" placeholder="${escapeHtml(MANUAL_DEFAULT_TITLE)}" />
+          <textarea class="manual-desc" data-line-id="${escapeHtml(it.lineId)}" data-field="description" placeholder="${escapeHtml(MANUAL_DESCRIPTION_PLACEHOLDER)}">${escapeHtml(it.beschreibung||'')}</textarea>
+        </div>`
+      : `<div><b>${kurzHTML}</b></div><div class="desc">${beschrHTML}</div>`;
+    const priceContent = isManual
+      ? `<div class="price-editor">
+          <input type="number" step="0.01" inputmode="decimal" class="price-input" data-line-id="${escapeHtml(it.lineId)}" data-field="price" placeholder="0,00" value="${escapeHtml(formatPriceInputValue(it.preisNum))}" />
+        </div>`
+      : fmtPrice(it.preisNum);
+    let unitValue = it.eh || '';
+    if(isManual){
+      unitValue = unitValue || MANUAL_DEFAULT_UNIT;
+      if(it.eh !== unitValue){
+        it.eh = unitValue;
+      }
+    }
+    const unitEditor = isManual
+      ? `<span class="unit-label" data-role="unit-label">${escapeHtml(unitValue)}</span>`
+      : `<span class="qty-unit" data-role="qty-unit">${escapeHtml(unitValue)}</span>`;
+    const rowClasses = ['basket-row'];
+    if(isManual){ rowClasses.push('manual-row'); }
+    if(isAlternative){ rowClasses.push('alt-item'); }
+    const altToggle = `<label class="alt-flag alt-flag-basket" title="Als Alternative markieren">
+        <input type="checkbox" class="alt-toggle-basket" data-line-id="${escapeHtml(it.lineId)}" ${isAlternative?'checked':''} aria-label="Alternativposition" />
+      </label>`;
+    return `<tr class="${rowClasses.join(' ')}" data-line-id="${escapeHtml(it.lineId)}" data-manual="${isManual?'true':'false'}" data-alt="${isAlternative?'true':'false'}" data-price="${Number.isFinite(it.preisNum)?String(it.preisNum):'0'}">
+      <td class="artnr-cell" data-role="artnr">${escapeHtml(displayArtnr(it))}</td>
+      <td class="desc-cell">${manualEditor}</td>
+      <td class="right price-cell" data-role="price-cell">${priceContent}</td>
+      <td class="right qty-cell">
+        <input type="number" step="0.01" inputmode="decimal" class="qty-input" data-line-id="${escapeHtml(it.lineId)}" data-field="qty" value="${escapeHtml(qtyVal)}" />
+      </td>
+      <td class="unit-cell">${unitEditor}</td>
+      <td class="center alt-cell">${altToggle}</td>
+      <td class="${totalClasses.join(' ')}" data-role="line-total" data-line-id="${escapeHtml(it.lineId)}" data-total="${Number.isFinite(totalNum)?String(totalNum):'0'}">${totalInfo.text}</td>
+      <td class="action" style="width:48px">
+        <button type="button" class="remove-line" data-line-id="${escapeHtml(it.lineId)}" title="Position entfernen" aria-label="Position entfernen">✖</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const bodyHTML = rows || '<tr class="empty"><td colspan="8" class="muted">Keine Positionen markiert.</td></tr>';
+  const sums = { main: sumMain, alt: sumAlt, total: sumMain + sumAlt };
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>Art.Nr.</th><th>Bezeichnung (Kurztext + Beschreibung)</th><th class="right">EH-Preis</th><th class="right">Menge</th><th class="right">Gesamt</th></tr></thead>
-      <tbody>${rows||''}</tbody>
-      <tfoot><tr class="tot"><td colspan="4" class="right">Summe</td><td class="right${sum<0?' neg':''}">${fmtPrice(sum)}</td></tr></tfoot>
+      <thead><tr><th>Art.Nr.</th><th>Bezeichnung (Kurztext + Beschreibung)</th><th class="right">EH-Preis</th><th class="right">Menge</th><th>EH</th><th class="center">Alt.</th><th class="right">Gesamtpreis</th><th class="center">&nbsp;</th></tr></thead>
+      <tbody>${bodyHTML}</tbody>
+      <tfoot>
+        <tr class="tot total-main"><td colspan="6" class="right">Gesamtsumme</td><td class="right total-cell" id="sum-main" data-sum="${String(sumMain)}">${fmtPrice(sumMain)}</td><td></td></tr>
+        <tr class="tot total-alt"><td colspan="6" class="right"><em>Gesamtsumme Alternativpositionen</em></td><td class="right total-cell alt-total-cell" id="sum-alt" data-sum="${String(sumAlt)}">(${fmtPrice(sumAlt)})</td><td></td></tr>
+      </tfoot>
     </table>`;
-  $('#selCount').textContent=String(items.length);
-  $('#selSum').textContent=sum.toLocaleString('de-AT',{style:'currency',currency:'EUR'});
-  if(feedback){ pulseHead(); showToast(); updateDelta(sum); setStatus('ok','Bereit.',1500); }
+
+  updateSummaryDisplay(sums, items.length, !!feedback);
+
+  attachSummaryInteractions(wrap);
+
+  if(options?.focusLineId){
+    focusSummaryEditor(options.focusLineId, options.focusField);
+  }
+
+  if(feedback){ pulseHead(); setStatus('ok','Bereit.',1500); }
+}
+
+function attachSummaryInteractions(wrap){
+  const qtyInputs = wrap.querySelectorAll('input.qty-input');
+  const priceInputs = wrap.querySelectorAll('input.price-input');
+  const titleInputs = wrap.querySelectorAll('input.manual-title');
+  const descInputs = wrap.querySelectorAll('textarea.manual-desc');
+
+  const recomputeAndDisplay = (commit=false)=>{
+    const sums = computeBasketSums();
+    updateSummaryDisplay(sums, BASKET_STATE.items.length, commit);
+  };
+
+  const setRowInvalid = (row, key, invalid)=>{
+    if(!row) return;
+    if(invalid){ row.dataset[key] = '1'; }
+    else{ delete row.dataset[key]; }
+    if(row.dataset.qtyInvalid || row.dataset.priceInvalid){
+      row.classList.add('invalid');
+    }else{
+      row.classList.remove('invalid');
+    }
+  };
+
+  const setInputInvalid = (input, invalid)=>{
+    if(!input) return;
+    if(invalid){ input.classList.add('invalid'); }
+    else{ input.classList.remove('invalid'); }
+  };
+
+  qtyInputs.forEach(inp=>{
+    const lineId = inp.dataset.lineId;
+    const row = inp.closest('tr');
+    const totalCell = row?.querySelector('[data-role="line-total"]');
+
+    inp.addEventListener('input',()=>{
+      if(!lineId) return;
+      const existing = findBasketItem(lineId);
+      if(!existing){ return; }
+      const baseTotal = getLineTotalValue(existing);
+      const preview = setLineQty(lineId, inp.value, {commit:false});
+      if(preview.status === 'missing'){
+        renderSummary(false);
+        return;
+      }
+      if(preview.status === 'invalid'){
+        setRowInvalid(row,'qtyInvalid',true);
+        setInputInvalid(inp,true);
+        return;
+      }
+
+      setRowInvalid(row,'qtyInvalid',false);
+      setInputInvalid(inp,false);
+
+      if(preview.status === 'preview' && preview.item){
+        updateLineTotalCell(totalCell, preview.item.totalNum, preview.item.isAlternative);
+        const previewSums = computeBasketSums();
+        const previewTotal = getLineTotalValue(preview.item);
+        const delta = previewTotal - baseTotal;
+        if(existing?.isAlternative){ previewSums.alt += delta; }
+        else{ previewSums.main += delta; }
+        previewSums.total = previewSums.main + previewSums.alt;
+        updateSummaryDisplay(previewSums, BASKET_STATE.items.length, false);
+      }
+      else if(preview.status === 'empty'){
+        updateLineTotalCell(totalCell, NaN, existing?.isAlternative);
+        const previewSums = computeBasketSums();
+        if(existing?.isAlternative){ previewSums.alt -= baseTotal; }
+        else{ previewSums.main -= baseTotal; }
+        previewSums.total = previewSums.main + previewSums.alt;
+        updateSummaryDisplay(previewSums, BASKET_STATE.items.length, false);
+      }
+      else{
+        updateLineTotalCell(totalCell, baseTotal, existing?.isAlternative);
+        recomputeAndDisplay(false);
+      }
+    });
+
+    inp.addEventListener('change',()=>{
+      if(!lineId) return;
+      const before = findBasketItem(lineId);
+      const result = setLineQty(lineId, inp.value);
+
+      if(result.status === 'removed'){
+        recomputeAndDisplay(true);
+        renderSummary(false);
+        triggerUpdatedBadge();
+        return;
+      }
+
+      if(result.status === 'missing'){
+        renderSummary(false);
+        return;
+      }
+
+      if(result.status === 'invalid'){
+        setRowInvalid(row,'qtyInvalid',true);
+        setInputInvalid(inp,true);
+        if(before){
+          inp.value = formatQtyInputValue(before.qtyNum);
+          updateLineTotalCell(totalCell, getLineTotalValue(before), before.isAlternative);
+        }
+        setStatus('warn','Ungültige Menge.',2500);
+        recomputeAndDisplay(false);
+        return;
+      }
+
+      setRowInvalid(row,'qtyInvalid',false);
+      setInputInvalid(inp,false);
+
+      if(result.status === 'updated' && result.item){
+        inp.value = formatQtyInputValue(result.item.qtyNum);
+        updateLineTotalCell(totalCell, result.item.totalNum, result.item.isAlternative);
+        recomputeAndDisplay(true);
+        triggerUpdatedBadge();
+      }
+      else if(result.status === 'empty' && before){
+        inp.value = formatQtyInputValue(before.qtyNum);
+        updateLineTotalCell(totalCell, getLineTotalValue(before), before.isAlternative);
+        recomputeAndDisplay(false);
+      }
+      else{
+        const fresh = findBasketItem(lineId);
+        updateLineTotalCell(totalCell, getLineTotalValue(fresh), fresh?.isAlternative);
+        recomputeAndDisplay(false);
+      }
+    });
+  });
+
+  priceInputs.forEach(inp=>{
+    const lineId = inp.dataset.lineId;
+    const row = inp.closest('tr');
+    const totalCell = row?.querySelector('[data-role="line-total"]');
+
+    inp.addEventListener('input',()=>{
+      if(!lineId) return;
+      const existing = findBasketItem(lineId);
+      if(!existing){ renderSummary(false); return; }
+      const baseTotal = getLineTotalValue(existing);
+      const raw = inp.value;
+      const trimmed = typeof raw === 'string' ? raw.trim() : '';
+      let previewPrice = 0;
+      if(trimmed){
+        const parsed = parseEuro(raw);
+        if(!Number.isFinite(parsed)){
+          setRowInvalid(row,'priceInvalid',true);
+          setInputInvalid(inp,true);
+          return;
+        }
+        previewPrice = parsed;
+      }
+      setRowInvalid(row,'priceInvalid',false);
+      setInputInvalid(inp,false);
+      const qty = Number.isFinite(existing.qtyNum) ? existing.qtyNum : 0;
+      const previewTotal = qty * previewPrice;
+      updateLineTotalCell(totalCell, previewTotal, existing?.isAlternative);
+      const previewSums = computeBasketSums();
+      const delta = previewTotal - baseTotal;
+      if(existing?.isAlternative){ previewSums.alt += delta; }
+      else{ previewSums.main += delta; }
+      previewSums.total = previewSums.main + previewSums.alt;
+      updateSummaryDisplay(previewSums, BASKET_STATE.items.length, false);
+    });
+
+    inp.addEventListener('change',()=>{
+      if(!lineId) return;
+      const existing = findBasketItem(lineId);
+      if(!existing){ renderSummary(false); return; }
+      const raw = inp.value;
+      const trimmed = typeof raw === 'string' ? raw.trim() : '';
+      let newPrice = 0;
+      if(trimmed){
+        const parsed = parseEuro(raw);
+        if(!Number.isFinite(parsed)){
+          setRowInvalid(row,'priceInvalid',true);
+          setInputInvalid(inp,true);
+          inp.value = formatPriceInputValue(existing.preisNum);
+          updateLineTotalCell(totalCell, getLineTotalValue(existing), existing.isAlternative);
+          setStatus('warn','Ungültiger Preis.',2500);
+          recomputeAndDisplay(false);
+          return;
+        }
+        newPrice = parsed;
+      }
+      existing.preisNum = newPrice;
+      const qty = Number.isFinite(existing.qtyNum) ? existing.qtyNum : 0;
+      existing.totalNum = qty * newPrice;
+      inp.value = formatPriceInputValue(existing.preisNum);
+      updateLineTotalCell(totalCell, existing.totalNum, existing.isAlternative);
+      setRowInvalid(row,'priceInvalid',false);
+      setInputInvalid(inp,false);
+      recomputeAndDisplay(true);
+      triggerUpdatedBadge();
+    });
+  });
+
+  titleInputs.forEach(inp=>{
+    const lineId = inp.dataset.lineId;
+    if(!lineId) return;
+    inp.addEventListener('input',()=>{
+      const existing = findBasketItem(lineId);
+      if(existing){ existing.kurz = inp.value; }
+    });
+  });
+
+  descInputs.forEach(inp=>{
+    const lineId = inp.dataset.lineId;
+    if(!lineId) return;
+    requestAnimationFrame(()=>autoGrow(inp));
+    inp.addEventListener('input',()=>{
+      autoGrow(inp);
+      const existing = findBasketItem(lineId);
+      if(existing){ existing.beschreibung = inp.value; }
+    });
+  });
+
+
+  const altToggles = wrap.querySelectorAll('input.alt-toggle-basket');
+  altToggles.forEach(toggle=>{
+    toggle.addEventListener('change',()=>{
+      const lineId = toggle.dataset.lineId;
+      if(!lineId) return;
+      setAltFlag(lineId, toggle.checked);
+    });
+  });
+
+  wrap.querySelectorAll('button.remove-line').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const lineId = btn.dataset.lineId;
+      if(!lineId) return;
+      if(removeLine(lineId)){
+        recomputeAndDisplay(true);
+        renderSummary(false);
+        triggerUpdatedBadge();
+      }
+    });
+  });
 }
 
 function applyVersionInfo(){
@@ -987,7 +1639,7 @@ window.addEventListener('afterprint', clearPrintState);
 
 /* ============== Drucken (ein Fenster) ============== */
 function buildPrintDoc(){
-  const items=[...SELECTED.values()].sort((a,b)=> String(a.id).localeCompare(String(b.id),'de',{numeric:true,sensitivity:'base'}));
+  const items=getDisplayOrderedItems();
   if(items.length===0) return null;
 
   const BVH=($('#bvhInput')?.value||'').trim()||'–';
@@ -996,19 +1648,24 @@ function buildPrintDoc(){
   const BETR=($('#betreffInput')?.value||'').trim()||'–';
   const DAT=new Date().toLocaleDateString('de-AT');
   const SHEET = CURRENT_SHEET || '–';
-  const PRICE_LIST = getCurrentPriceListLabel();
 
-  let tbody=''; let total=0;
+  let tbody=''; let sumMain=0; let sumAlt=0;
   items.forEach(it=>{
-    total+=it.totalNum;
+    const lineTotal=Number.isFinite(it.totalNum)?it.totalNum:0;
+    if(it.isAlternative){ sumAlt+=lineTotal; } else { sumMain+=lineTotal; }
     const kurzHTML = linkify(escapeHtml(it.kurz||''));
     const beschrHTML = linkify(escapeHtml(it.beschreibung||''));
-    tbody+=`<tr class="item-row">
-      <td>${escapeHtml(it.id)}</td>
+    const rowClasses=['item-row'];
+    if(it.isAlternative){ rowClasses.push('alt-item'); }
+    const totalInfo = formatLineTotalDisplay(lineTotal, !!it.isAlternative);
+    const unitText = escapeHtml(it.eh||'');
+    const qtyText = fmtQty(it.qtyNum);
+    tbody+=`<tr class="${rowClasses.join(' ')}">
+      <td>${escapeHtml(displayArtnr(it))}</td>
       <td><div><b>${kurzHTML}</b></div><div class="desc">${beschrHTML}</div></td>
       <td class="right">${fmtPrice(it.preisNum)}</td>
-      <td class="right">${fmtQty(it.qtyNum)} ${escapeHtml(it.eh)}</td>
-      <td class="right${it.totalNum<0?' neg':''}">${fmtPrice(it.totalNum)}</td>
+      <td class="right">${qtyText} ${unitText}</td>
+      <td class="right${totalInfo.isNegative?' neg':''}">${totalInfo.text}</td>
     </tr>`;
   });
 
@@ -1040,12 +1697,18 @@ function buildPrintDoc(){
     td, th{ page-break-inside: avoid; }
     .right{ text-align:right; }
     .neg{ color:#b91c1c; font-weight:600; }
+    tr.alt-item td{ font-style:italic; }
+    tr.alt-item td .desc{ font-style:normal; }
+    tr.alt-item td .desc b{ font-style:italic; }
     .desc{ white-space:pre-wrap; }
     .desc a{ text-decoration:underline; word-break:break-all; }
 
-    .grand-total{ page-break-inside: avoid; margin-top:10px; border-top:2px solid #bbb; display:grid; grid-template-columns:1fr 140px; gap:8px; align-items:center; font-weight:700; }
+    .grand-totals{ page-break-inside: avoid; margin-top:10px; border-top:2px solid #bbb; padding-top:8px; display:grid; gap:6px; }
+    .grand-total{ display:grid; grid-template-columns:1fr 140px; gap:8px; align-items:center; font-weight:700; }
     .grand-total .label{ text-align:right; padding-right:8px; }
     .grand-total .value{ text-align:right; }
+    .grand-total.alt{ font-style:italic; font-weight:600; opacity:.9; }
+    .grand-total.alt .value{ font-style:italic; }
 
     .note{ margin-top:12px; font-size:11px; color:#374151; }
 
@@ -1079,7 +1742,10 @@ function buildPrintDoc(){
       <tbody>${tbody}</tbody>
     </table>
 
-    <div class="grand-total"><div class="label">Gesamtsumme</div><div class="value${total<0?' neg':''}">${(total).toLocaleString('de-AT',{style:'currency',currency:'EUR'})}</div></div>
+    <div class="grand-totals">
+      <div class="grand-total"><div class="label">Gesamtsumme</div><div class="value${sumMain<0?' neg':''}">${sumMain.toLocaleString('de-AT',{style:'currency',currency:'EUR'})}</div></div>
+      <div class="grand-total alt"><div class="label"><em>Gesamtsumme Alternativpositionen</em></div><div class="value${sumAlt<0?' neg':''}">(${fmtPrice(sumAlt)})</div></div>
+    </div>
 
     <div class="note">
       Der Preis versteht sich inkl. 20% MwSt.
@@ -1092,7 +1758,7 @@ function buildPrintDoc(){
 }
 
 document.getElementById('printSummary').addEventListener('click', async ()=>{
-  if(SELECTED.size===0){ setStatus('warn','Keine markierten Positionen zum Drucken.',3000); return; }
+  if(getBasketSize()===0){ setStatus('warn','Keine markierten Positionen zum Drucken.',3000); return; }
   const html = buildPrintDoc(); if(!html){ setStatus('warn','Nichts zu drucken.',3000); return; }
 
   const iframe = document.createElement('iframe');
