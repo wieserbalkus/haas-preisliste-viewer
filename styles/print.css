@@ -18,4 +18,21 @@
   body[data-print-mode] .print-portal .group-row{background:#fff9ed;font-weight:600}
   body[data-print-mode] .print-portal .group-row td{padding-top:6px;padding-bottom:6px}
   body[data-print-mode] .print-portal .desc{white-space:pre-wrap;line-height:1.35em}
+
+  body[data-print-mode] .print-portal thead{display:table-header-group}
+  body[data-print-mode] .print-portal tbody{display:table-row-group}
+
+  /* HIER Spaltenbreiten anpassen: .col-artnr, .col-kurz, .col-beschr, .col-eh, .col-ehinfo, .col-preis, .col-menge, .col-gesamt, .col-hinweis */
+  /* Hinweis: Die Summe der Breiten sollte ca. 100 % ergeben. Zahlen-Spalten gerne rechtsbündig/tabellarisch setzen. */
+  body[data-print-mode] .print-portal .col-artnr{ /* width: 50px; */ }
+  body[data-print-mode] .print-portal .col-kurz{ /* width: 140px; */ }
+  body[data-print-mode] .print-portal .col-beschr{ /* width: 240px; */ }
+  body[data-print-mode] .print-portal .col-eh{ /* width: 40px; */ }
+  body[data-print-mode] .print-portal .col-ehinfo{ /* width: 80px; */ }
+  body[data-print-mode] .print-portal .col-preis{ /* width: 70px; */ }
+  body[data-print-mode] .print-portal .col-menge{ /* width: 70px; */ }
+  body[data-print-mode] .print-portal .col-gesamt{ /* width: 90px; */ }
+  body[data-print-mode] .print-portal .col-hinweis{ /* width: 160px; */ }
+
+  /* Optional: Seitenzahlen im Druck aktivieren: @page { @bottom-right { content: "Seite " counter(page); } } */
 }
