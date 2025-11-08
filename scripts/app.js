@@ -1778,7 +1778,7 @@ function buildPrintDoc(){
         <!-- ANPASSUNG: Breite Menge (entspricht ehemaliger 5 %-Spalte) hier ändern -->
         <th class="right" style="width:80px">Menge</th>
         <!-- ANPASSUNG: Breite Gesamtpreis (Restanteile, z. B. 20 %) hier ändern -->
-        <th class="right" style="width:60px">Gesamt</th>
+        <th class="right" style="width:65px">Gesamt</th>
       </tr></thead>
       <tbody>${tbody}</tbody>
     </table>
