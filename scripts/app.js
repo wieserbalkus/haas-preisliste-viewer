@@ -1592,7 +1592,7 @@ function buildListPrintMarkup(mode){
   const groups=collectPrintableGroups(mode);
   if(!groups.length) return '';
   const parts=['<table class="print-table">',
-    '<thead><tr><th class="col-artnr">Art.Nr.</th><th class="col-kurz">Kurztext</th><th class="col-beschr">Beschreibung</th><th class="col-eh">EH</th><th class="col-ehinfo">EH-Info</th><th class="col-preis right">EH-Preis</th><th class="col-hinweis">Hinweis</th></tr></thead>',
+    '<thead><tr><th class="col-artnr">Art.Nr.</th><th class="col-kurz">Kurztext</th><th class="col-beschr">Beschreibung</th><th class="col-eh">EH</th><th class="col-ehinfo">EHI</th><th class="col-preis right">Preis</th><th class="col-hinweis">Hinweis</th></tr></thead>',
     '<tbody>'];
   for(const {group,rows} of groups){
     parts.push(`<tr class="group-row"><td colspan="7"><strong>${escapeHtml(group.groupId)} – ${escapeHtml(group.title||'')}</strong></td></tr>`);
@@ -1644,7 +1644,7 @@ function applyListPrintPageRule(){
   if(listPrintPageStyle) return;
   const style=document.createElement('style');
   style.setAttribute('data-print-page','list');
-  style.textContent='@page { size: A4 landscape; margin: 10mm 8mm; }';
+  style.textContent='@page { size: A4 landscape; margin: 10mm 3mm; }';
   document.head.appendChild(style);
   listPrintPageStyle=style;
 }
