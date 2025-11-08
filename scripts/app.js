@@ -1587,27 +1587,20 @@ function collectPrintableGroups(mode){
 // Drucktabelle: Spaltenklassen für gezielte Layout-Anpassungen in print.css
 // col-artnr (Artikelnummer) · col-kurz (Kurztext) · col-beschr (Beschreibung)
 // col-eh (Einheit) · col-ehinfo (Einheitsinfo) · col-preis (Einheitspreis)
-// col-menge (Menge) · col-gesamt (Gesamtpreis) · col-hinweis (Hinweise)
+// col-hinweis (Hinweise)
 function buildListPrintMarkup(mode){
   const groups=collectPrintableGroups(mode);
   if(!groups.length) return '';
   const parts=['<table class="print-table">',
-    '<thead><tr><th class="col-artnr">Art.Nr.</th><th class="col-kurz">Kurztext</th><th class="col-beschr">Beschreibung</th><th class="col-eh">EH</th><th class="col-ehinfo">EH-Info</th><th class="col-preis right">EH-Preis</th><th class="col-menge right">Menge</th><th class="col-gesamt right">Gesamtpreis</th><th class="col-hinweis">Hinweis</th></tr></thead>',
+    '<thead><tr><th class="col-artnr">Art.Nr.</th><th class="col-kurz">Kurztext</th><th class="col-beschr">Beschreibung</th><th class="col-eh">EH</th><th class="col-ehinfo">EHI</th><th class="col-preis right">Preis</th><th class="col-hinweis">Hinweis</th></tr></thead>',
     '<tbody>'];
   for(const {group,rows} of groups){
-    parts.push(`<tr class="group-row"><td colspan="9"><strong>${escapeHtml(group.groupId)} – ${escapeHtml(group.title||'')}</strong></td></tr>`);
+    parts.push(`<tr class="group-row"><td colspan="7"><strong>${escapeHtml(group.groupId)} – ${escapeHtml(group.title||'')}</strong></td></tr>`);
     for(const row of rows){
       const state=ensureRowState(row);
       const editable=isSonderEditable(row.id);
       const preisSource=editable?state.preis:row.preis;
       const preisText=fmtPrice(preisSource)||'–';
-      const qtyNum=parseQty(state.qty);
-      const qtyText=(!Number.isNaN(qtyNum) && qtyNum!==0)?fmtQty(qtyNum):'–';
-      const preisNum=parseEuro(preisSource);
-      const totalVal=(!Number.isNaN(qtyNum) && qtyNum!==0 && Number.isFinite(preisNum))?preisNum*qtyNum:NaN;
-      const totalText=Number.isFinite(totalVal)?fmtPrice(totalVal):'–';
-      const totalClasses=['col-gesamt','right'];
-      if(Number.isFinite(totalVal)&&totalVal<0){ totalClasses.push('neg'); }
       const kurzText=printableText(editable?state.kurz:row.kurz_raw);
       const beschrText=printableText(editable?state.beschreibung:row.beschreibung_raw);
       const ehText=escapeHtml((editable?state.einheit:row.einheit)||'');
@@ -1620,8 +1613,6 @@ function buildListPrintMarkup(mode){
         <td class="col-eh">${ehText}</td>
         <td class="col-ehinfo">${ehInfoText}</td>
         <td class="col-preis right">${preisText}</td>
-        <td class="col-menge right">${qtyText}</td>
-        <td class="${totalClasses.join(' ')}">${totalText}</td>
         <td class="col-hinweis desc">${hinweisText}</td>
       </tr>`);
     }
@@ -1653,7 +1644,7 @@ function applyListPrintPageRule(){
   if(listPrintPageStyle) return;
   const style=document.createElement('style');
   style.setAttribute('data-print-page','list');
-  style.textContent='@page { size: A4 landscape; margin: 10mm 8mm; }';
+  style.textContent='@page { size: A4 landscape; margin: 10mm 3mm; }';
   document.head.appendChild(style);
   listPrintPageStyle=style;
 }
@@ -1778,10 +1769,15 @@ function buildPrintDoc(){
 
     <table>
       <thead><tr>
+        <!-- ANPASSUNG: Breite Art.Nr. (Sollwert ca. 5 %) hier ändern -->
         <th style="width:30px">Art.Nr.</th>
+        <!-- ANPASSUNG: Breite Kurztext (20 %) + Beschreibung (40 %) bei Bedarf hier anpassen -->
         <th>Kurztext und Beschreibung</th>
+        <!-- ANPASSUNG: Breite EH-Preis (Sollwert ca. 5 %) hier ändern -->
         <th class="right" style="width:50px">EH-Preis</th>
+        <!-- ANPASSUNG: Breite Menge (entspricht ehemaliger 5 %-Spalte) hier ändern -->
         <th class="right" style="width:80px">Menge</th>
+        <!-- ANPASSUNG: Breite Gesamtpreis (Restanteile, z. B. 20 %) hier ändern -->
         <th class="right" style="width:60px">Gesamt</th>
       </tr></thead>
       <tbody>${tbody}</tbody>
