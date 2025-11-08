@@ -1639,11 +1639,33 @@ function mountPrintTable(mode){
   return true;
 }
 
+let listPrintPageStyle=null;
+
+function removeListPrintPageRule(){
+  if(listPrintPageStyle){
+    try{ listPrintPageStyle.remove(); }
+    catch{}
+    listPrintPageStyle=null;
+  }
+}
+
+function applyListPrintPageRule(){
+  if(listPrintPageStyle) return;
+  const style=document.createElement('style');
+  style.setAttribute('data-print-page','list');
+  style.textContent='@page { size: A4 landscape; margin: 10mm 8mm; }';
+  document.head.appendChild(style);
+  listPrintPageStyle=style;
+}
+
 function clearPrintState(){
   const portal=document.getElementById('printPortal');
   if(portal) portal.innerHTML='';
-  if(document.body.dataset.printMode) delete document.body.dataset.printMode;
+  delete document.body.dataset.printMode;
+  delete document.body.dataset.printListScope;
   if(document.body.hasAttribute('data-print-mode')) document.body.removeAttribute('data-print-mode');
+  if(document.body.hasAttribute('data-print-list-scope')) document.body.removeAttribute('data-print-list-scope');
+  removeListPrintPageRule();
 }
 
 function triggerListPrint(mode){
@@ -1651,7 +1673,9 @@ function triggerListPrint(mode){
     setStatus('warn','Keine Daten zum Drucken.',3000);
     return;
   }
-  document.body.dataset.printMode=mode;
+  document.body.dataset.printMode='list';
+  document.body.dataset.printListScope=mode;
+  applyListPrintPageRule();
   setStatus('info','Druckansicht (A4 quer) geöffnet…',2000);
   setTimeout(()=>window.print(),60);
 }
