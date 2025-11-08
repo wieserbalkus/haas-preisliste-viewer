@@ -1,21 +1,43 @@
 .print-portal{display:none}
 
-@page {
-  size: A4 landscape;
-  margin: 12mm;
-}
-
 @media print{
   body{
     background:#fff;
   }
   header, .controls, .filters, .summary, .toast, .drawer, .drawer-head, .drawer-body, .wrap > .panel > .table-wrap{display:none !important}
   .print-portal{display:block !important}
-  body[data-print-mode] .print-portal table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:10pt}
+  body[data-print-mode] .print-portal table{width:100%;border-collapse:collapse;font-size:10pt}
   body[data-print-mode] .print-portal thead th{background:#fff6e6;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   body[data-print-mode] .print-portal th,body[data-print-mode] .print-portal td{padding:4px 6px;border-bottom:1px solid #d9dde4;vertical-align:top}
   body[data-print-mode] .print-portal tr{break-inside:avoid}
   body[data-print-mode] .print-portal .group-row{background:#fff9ed;font-weight:600}
   body[data-print-mode] .print-portal .group-row td{padding-top:6px;padding-bottom:6px}
   body[data-print-mode] .print-portal .desc{white-space:pre-wrap;line-height:1.35em}
+  body[data-print-mode] .print-portal tbody tr{page-break-inside:avoid}
+  body[data-print-mode] .print-portal thead{display:table-header-group}
+  body[data-print-mode] .print-portal{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+
+  body[data-print-mode="list"] .wrap,
+  body[data-print-mode="list"] .print-portal{max-width:none;margin:0;padding:0}
+  body[data-print-mode="list"] .print-portal table{table-layout:fixed;font-size:9.5pt}
+  body[data-print-mode="list"] .print-portal .desc{white-space:normal;line-height:1.3}
+  body[data-print-mode="list"] .print-portal .col-beschr,
+  body[data-print-mode="list"] .print-portal .col-hinweis{white-space:normal;overflow-wrap:anywhere;hyphens:auto;line-height:1.3}
+
+  /* HIER Spaltenbreiten anpassen: .col-artnr, .col-kurz, .col-beschr, .col-eh, .col-ehinfo, .col-preis, .col-menge, .col-gesamt, .col-hinweis */
+  /* Hinweis: Breiten sollten zusammen ca. 100 % ergeben; Zahlen-Spalten können rechtsbündig/tabellarisch ausgerichtet werden. */
+  body[data-print-mode="list"] .print-portal .col-artnr{width:5%}
+  body[data-print-mode="list"] .print-portal .col-kurz{width:15%}
+  body[data-print-mode="list"] .print-portal .col-beschr{width:40%}
+  body[data-print-mode="list"] .print-portal .col-eh{width:5%}
+  body[data-print-mode="list"] .print-portal .col-ehinfo{width:5%}
+  body[data-print-mode="list"] .print-portal .col-preis{width:5%}
+  body[data-print-mode="list"] .print-portal .col-menge{width:5%}
+  body[data-print-mode="list"] .print-portal .col-gesamt{width:5%}
+  body[data-print-mode="list"] .print-portal .col-hinweis{width:15%}
+  body[data-print-mode="list"] .print-portal .col-preis,
+  body[data-print-mode="list"] .print-portal .col-menge,
+  body[data-print-mode="list"] .print-portal .col-gesamt{text-align:right;font-variant-numeric:tabular-nums}
+
+  /* Optional: Seitenzahlen unten aktivieren über @page { @bottom-center { content: counter(page) " / " counter(pages); } } */
 }

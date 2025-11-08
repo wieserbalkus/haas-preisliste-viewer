@@ -1076,8 +1076,6 @@ document.addEventListener('keydown',(e)=>{ if(e.altKey && (e.key==='o' || e.key=
 document.addEventListener('keydown',(e)=>{
   if(!e.altKey || !e.shiftKey) return;
   const key = String(e.key||'').toLowerCase();
-  if(key==='h'){ e.preventDefault(); triggerListPrint('all'); return; }
-  if(key==='o'){ e.preventDefault(); triggerListPrint('current'); return; }
   if(key==='n'){
     const target = e.target || document.activeElement;
     if(target){
@@ -1088,6 +1086,24 @@ document.addEventListener('keydown',(e)=>{
     e.preventDefault();
     addManualTopItem();
   }
+});
+
+document.addEventListener('keydown',(e)=>{
+  if(!e.shiftKey) return;
+  if(!(e.ctrlKey || e.metaKey)) return;
+  if(e.altKey) return;
+  const key = String(e.key||'').toLowerCase();
+  if(key==='h'){ e.preventDefault(); triggerListPrint('all'); return; }
+  if(key==='o'){ e.preventDefault(); triggerListPrint('current'); }
+});
+
+document.addEventListener('keydown',(e)=>{
+  if(String(e.key||'').toLowerCase()!=='p') return;
+  if(!(e.ctrlKey || e.metaKey)) return;
+  if(e.altKey) return;
+  if(getBasketSize()<=0){ return; }
+  e.preventDefault();
+  doPrintSummary();
 });
 
 /* Zusammenfassung + Feedback */
@@ -1568,11 +1584,15 @@ function collectPrintableGroups(mode){
   return result;
 }
 
+// Drucktabelle: Spaltenklassen für gezielte Layout-Anpassungen in print.css
+// col-artnr (Artikelnummer) · col-kurz (Kurztext) · col-beschr (Beschreibung)
+// col-eh (Einheit) · col-ehinfo (Einheitsinfo) · col-preis (Einheitspreis)
+// col-menge (Menge) · col-gesamt (Gesamtpreis) · col-hinweis (Hinweise)
 function buildListPrintMarkup(mode){
   const groups=collectPrintableGroups(mode);
   if(!groups.length) return '';
   const parts=['<table class="print-table">',
-    '<thead><tr><th>Art.Nr.</th><th>Kurztext</th><th>Beschreibung</th><th>EH</th><th>EH-Info</th><th class="right">EH-Preis</th><th class="right">Menge</th><th class="right">Gesamtpreis</th><th>Hinweis</th></tr></thead>',
+    '<thead><tr><th class="col-artnr">Art.Nr.</th><th class="col-kurz">Kurztext</th><th class="col-beschr">Beschreibung</th><th class="col-eh">EH</th><th class="col-ehinfo">EH-Info</th><th class="col-preis right">EH-Preis</th><th class="col-menge right">Menge</th><th class="col-gesamt right">Gesamtpreis</th><th class="col-hinweis">Hinweis</th></tr></thead>',
     '<tbody>'];
   for(const {group,rows} of groups){
     parts.push(`<tr class="group-row"><td colspan="9"><strong>${escapeHtml(group.groupId)} – ${escapeHtml(group.title||'')}</strong></td></tr>`);
@@ -1586,22 +1606,23 @@ function buildListPrintMarkup(mode){
       const preisNum=parseEuro(preisSource);
       const totalVal=(!Number.isNaN(qtyNum) && qtyNum!==0 && Number.isFinite(preisNum))?preisNum*qtyNum:NaN;
       const totalText=Number.isFinite(totalVal)?fmtPrice(totalVal):'–';
-      const totalClass=Number.isFinite(totalVal)&&totalVal<0?' class="neg"':'';
+      const totalClasses=['col-gesamt','right'];
+      if(Number.isFinite(totalVal)&&totalVal<0){ totalClasses.push('neg'); }
       const kurzText=printableText(editable?state.kurz:row.kurz_raw);
       const beschrText=printableText(editable?state.beschreibung:row.beschreibung_raw);
       const ehText=escapeHtml((editable?state.einheit:row.einheit)||'');
       const ehInfoText=escapeHtml((editable?state.einheitInfo:row.einheitInfo)||'');
       const hinweisText=printableText(row.hinweis_raw||'');
       parts.push(`<tr>
-        <td>${escapeHtml(row.id||'')}</td>
-        <td>${kurzText}</td>
-        <td>${beschrText}</td>
-        <td>${ehText}</td>
-        <td>${ehInfoText}</td>
-        <td class="right">${preisText}</td>
-        <td class="right">${qtyText}</td>
-        <td class="right"${totalClass}>${totalText}</td>
-        <td class="desc">${hinweisText}</td>
+        <td class="col-artnr">${escapeHtml(row.id||'')}</td>
+        <td class="col-kurz">${kurzText}</td>
+        <td class="col-beschr">${beschrText}</td>
+        <td class="col-eh">${ehText}</td>
+        <td class="col-ehinfo">${ehInfoText}</td>
+        <td class="col-preis right">${preisText}</td>
+        <td class="col-menge right">${qtyText}</td>
+        <td class="${totalClasses.join(' ')}">${totalText}</td>
+        <td class="col-hinweis desc">${hinweisText}</td>
       </tr>`);
     }
   }
@@ -1618,11 +1639,33 @@ function mountPrintTable(mode){
   return true;
 }
 
+let listPrintPageStyle=null;
+
+function removeListPrintPageRule(){
+  if(listPrintPageStyle){
+    try{ listPrintPageStyle.remove(); }
+    catch{}
+    listPrintPageStyle=null;
+  }
+}
+
+function applyListPrintPageRule(){
+  if(listPrintPageStyle) return;
+  const style=document.createElement('style');
+  style.setAttribute('data-print-page','list');
+  style.textContent='@page { size: A4 landscape; margin: 10mm 8mm; }';
+  document.head.appendChild(style);
+  listPrintPageStyle=style;
+}
+
 function clearPrintState(){
   const portal=document.getElementById('printPortal');
   if(portal) portal.innerHTML='';
-  if(document.body.dataset.printMode) delete document.body.dataset.printMode;
+  delete document.body.dataset.printMode;
+  delete document.body.dataset.printListScope;
   if(document.body.hasAttribute('data-print-mode')) document.body.removeAttribute('data-print-mode');
+  if(document.body.hasAttribute('data-print-list-scope')) document.body.removeAttribute('data-print-list-scope');
+  removeListPrintPageRule();
 }
 
 function triggerListPrint(mode){
@@ -1630,7 +1673,9 @@ function triggerListPrint(mode){
     setStatus('warn','Keine Daten zum Drucken.',3000);
     return;
   }
-  document.body.dataset.printMode=mode;
+  document.body.dataset.printMode='list';
+  document.body.dataset.printListScope=mode;
+  applyListPrintPageRule();
   setStatus('info','Druckansicht (A4 quer) geöffnet…',2000);
   setTimeout(()=>window.print(),60);
 }
@@ -1757,9 +1802,9 @@ function buildPrintDoc(){
   </body></html>`;
 }
 
-document.getElementById('printSummary').addEventListener('click', async ()=>{
-  if(getBasketSize()===0){ setStatus('warn','Keine markierten Positionen zum Drucken.',3000); return; }
-  const html = buildPrintDoc(); if(!html){ setStatus('warn','Nichts zu drucken.',3000); return; }
+function doPrintSummary(){
+  if(getBasketSize()===0){ setStatus('warn','Keine markierten Positionen zum Drucken.',3000); return false; }
+  const html = buildPrintDoc(); if(!html){ setStatus('warn','Nichts zu drucken.',3000); return false; }
 
   const iframe = document.createElement('iframe');
   Object.assign(iframe.style,{position:'fixed',right:'0',bottom:'0',width:'0',height:'0',border:'0'});
@@ -1770,10 +1815,15 @@ document.getElementById('printSummary').addEventListener('click', async ()=>{
   doc.open(); doc.write(html); doc.close();
 
   const done = () => { try{ iframe.remove(); }catch{} };
-  const safePrint = () => { try{ win.focus(); win.onafterprint = done; win.print(); } catch { done(); } }
+  const safePrint = () => { try{ win.focus(); win.onafterprint = done; win.print(); } catch { done(); } };
 
   if (doc.readyState === 'complete') { setTimeout(safePrint, 250); }
   else { win.addEventListener('load', () => setTimeout(safePrint, 250), {once:true}); }
+  return true;
+}
+
+document.getElementById('printSummary').addEventListener('click', ()=>{
+  doPrintSummary();
 });
 
 /* ================= Init =============================== */
