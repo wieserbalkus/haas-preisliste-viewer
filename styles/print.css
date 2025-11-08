@@ -18,4 +18,24 @@
   body[data-print-mode] .print-portal .group-row{background:#fff9ed;font-weight:600}
   body[data-print-mode] .print-portal .group-row td{padding-top:6px;padding-bottom:6px}
   body[data-print-mode] .print-portal .desc{white-space:pre-wrap;line-height:1.35em}
+  body[data-print-mode] .print-portal tbody tr{page-break-inside:avoid}
+  body[data-print-mode] .print-portal thead{display:table-header-group}
+  body[data-print-mode] .print-portal{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+
+  /* HIER Spaltenbreiten anpassen: .col-artnr, .col-kurz, .col-beschr, .col-eh, .col-ehinfo, .col-preis, .col-menge, .col-gesamt, .col-hinweis */
+  /* Hinweis: Breiten sollten zusammen ca. 100 % ergeben; Zahlen-Spalten können rechtsbündig/tabellarisch ausgerichtet werden. */
+  body[data-print-mode] .print-portal .col-artnr{width:auto}
+  body[data-print-mode] .print-portal .col-kurz{width:auto}
+  body[data-print-mode] .print-portal .col-beschr{width:auto}
+  body[data-print-mode] .print-portal .col-eh{width:auto}
+  body[data-print-mode] .print-portal .col-ehinfo{width:auto}
+  body[data-print-mode] .print-portal .col-preis{width:auto}
+  body[data-print-mode] .print-portal .col-menge{width:auto}
+  body[data-print-mode] .print-portal .col-gesamt{width:auto}
+  body[data-print-mode] .print-portal .col-hinweis{width:auto}
+  body[data-print-mode] .print-portal .col-preis,
+  body[data-print-mode] .print-portal .col-menge,
+  body[data-print-mode] .print-portal .col-gesamt{text-align:right}
+
+  /* Optional: Seitenzahlen unten aktivieren über @page { @bottom-center { content: counter(page) " / " counter(pages); } } */
 }
