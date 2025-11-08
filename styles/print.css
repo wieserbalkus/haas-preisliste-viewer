@@ -26,13 +26,13 @@
 
   /* HIER Spaltenbreiten anpassen: .col-artnr, .col-kurz, .col-beschr, .col-eh, .col-ehinfo, .col-preis, .col-hinweis */
   /* Hinweis: Breiten sollten zusammen ca. 100 % ergeben; Zahlen-Spalten können rechtsbündig/tabellarisch ausgerichtet werden. */
-  body[data-print-mode="list"] .print-portal .col-artnr{width:5%}
-  body[data-print-mode="list"] .print-portal .col-kurz{width:20%}
-  body[data-print-mode="list"] .print-portal .col-beschr{width:40%}
+  body[data-print-mode="list"] .print-portal .col-artnr{width:4%}
+  body[data-print-mode="list"] .print-portal .col-kurz{width:21%}
+  body[data-print-mode="list"] .print-portal .col-beschr{width:45%}
   body[data-print-mode="list"] .print-portal .col-eh{width:5%}
   body[data-print-mode="list"] .print-portal .col-ehinfo{width:5%}
-  body[data-print-mode="list"] .print-portal .col-preis{width:5%}
-  body[data-print-mode="list"] .print-portal .col-hinweis{width:20%}
+  body[data-print-mode="list"] .print-portal .col-preis{width:7%}
+  body[data-print-mode="list"] .print-portal .col-hinweis{width:13%}
   body[data-print-mode="list"] .print-portal th.col-preis,
   body[data-print-mode="list"] .print-portal td.col-preis{text-align:right;font-variant-numeric:tabular-nums}
   body[data-print-mode="list"] .print-portal td.col-preis{white-space:nowrap}
