@@ -38,16 +38,31 @@
       }
 
       function appendScript(src){
-        const script = document.createElement('script');
-        script.defer = true;
-        script.src = src + (src.includes('?') ? '&' : '?') + 'v=' + versionParam;
-        head.appendChild(script);
+        return new Promise((resolve, reject)=>{
+          const script = document.createElement('script');
+          script.async = false;
+          script.src = src + (src.includes('?') ? '&' : '?') + 'v=' + versionParam;
+          script.onload = ()=>resolve();
+          script.onerror = (evt)=>{
+            const error = new Error('Skript konnte nicht geladen werden: ' + src);
+            error.event = evt;
+            reject(error);
+          };
+          head.appendChild(script);
+        });
       }
 
       appendLink('./styles/app.css');
       appendLink('./styles/print.css', {media:'print'});
-      ['meta','storage','render','print','init'].forEach(name=>{
-        appendScript(`./scripts/${name}.js`);
+      const bootScripts = ['meta','storage','render','print','init'];
+      const bootPromise = bootScripts.reduce(
+        (chain, name)=>chain.then(()=>appendScript(`./scripts/${name}.js`)),
+        Promise.resolve()
+      );
+      window.APP_BOOT_PROMISE = bootPromise;
+      bootPromise.catch(err=>{
+        console.error('Bootstrapping fehlgeschlagen.', err);
+        window.APP_BOOT_ERROR = err;
       });
 
       function applyVersionedSrcs(){
