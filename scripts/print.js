@@ -205,7 +205,7 @@ function buildPrintDoc(){
         </div>
       </div>
       <div class="rightcol">
-        <img src="'+logoUrl+'" class="logo" alt="Logo" />
+        <img src="${logoUrl}" class="logo" alt="Logo" />
         <div class="created"><b>Erstellt am:</b> ${escapeHtml(DAT)}</div>
       </div>
     </div>
