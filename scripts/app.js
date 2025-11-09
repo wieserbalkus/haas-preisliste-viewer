@@ -1875,7 +1875,10 @@ document.getElementById('printSummary').addEventListener('click', ()=>{
 });
 
 /* ================= Init =============================== */
-window.addEventListener('DOMContentLoaded', async ()=>{
+let appInitStarted = false;
+async function initApp(){
+  if(appInitStarted) return;
+  appInitStarted = true;
   startVersionWatcher();
   try{ localStorage.clear(); sessionStorage.clear(); }catch{}
   applyVersionInfo();
@@ -1905,4 +1908,10 @@ window.addEventListener('DOMContentLoaded', async ()=>{
     setStatus('warn',`Standarddatei <b>${escapeHtml(DEFAULT_FILE)}</b> konnte nicht geladen werden.`,4000);
     $('#manualBtn').style.display='inline-flex';
   }
-});
+}
+
+if(document.readyState === 'loading'){
+  window.addEventListener('DOMContentLoaded', initApp, {once:true});
+}else{
+  initApp();
+}

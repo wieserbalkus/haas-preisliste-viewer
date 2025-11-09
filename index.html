@@ -48,14 +48,20 @@
       appendLink('./styles/print.css', {media:'print'});
       appendScript('./scripts/app.js');
 
-      document.addEventListener('DOMContentLoaded', ()=>{
+      function applyVersionedSrcs(){
         document.querySelectorAll('[data-versioned-src]').forEach(el=>{
           const base = el.getAttribute('data-versioned-src');
           if(!base) return;
           const sep = base.includes('?') ? '&' : '?';
           el.setAttribute('src', base + sep + 'v=' + versionParam);
         });
-      });
+      }
+
+      if(document.readyState === 'loading'){
+        document.addEventListener('DOMContentLoaded', applyVersionedSrcs, {once:true});
+      }else{
+        applyVersionedSrcs();
+      }
     }
 
     fetch(metaUrl + '?ts=' + Date.now(), {cache:'no-store'})
