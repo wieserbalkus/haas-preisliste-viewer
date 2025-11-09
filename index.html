@@ -7,9 +7,69 @@
 <meta name="robots" content="noindex, nofollow">
 <meta name="googlebot" content="noimageindex">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+  (function(){
+    const metaUrl = './data/app-meta.json';
+    window.APP_META_URL = metaUrl;
 
-<link rel="stylesheet" href="./styles/app.css" />
-<link rel="stylesheet" href="./styles/print.css" media="print" />
+    function applyMeta(meta){
+      const defaults = {
+        version: 'dev',
+        buildDate: '',
+        defaultFile: 'Artikelpreisliste.xlsx',
+        defaultFilePath: './data/Artikelpreisliste.xlsx',
+        buildSource: './data/Artikelpreisliste.xlsx'
+      };
+      const merged = Object.assign({}, defaults, meta || {});
+      window.APP_META = merged;
+      const versionParam = encodeURIComponent(merged.version || defaults.version);
+      const head = document.getElementsByTagName('head')[0];
+
+      function appendLink(href, extra){
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = href + (href.includes('?') ? '&' : '?') + 'v=' + versionParam;
+        if(extra){
+          Object.entries(extra).forEach(([key,value])=>{
+            if(value != null){ link.setAttribute(key, value); }
+          });
+        }
+        head.appendChild(link);
+      }
+
+      function appendScript(src){
+        const script = document.createElement('script');
+        script.defer = true;
+        script.src = src + (src.includes('?') ? '&' : '?') + 'v=' + versionParam;
+        head.appendChild(script);
+      }
+
+      appendLink('./styles/app.css');
+      appendLink('./styles/print.css', {media:'print'});
+      appendScript('./scripts/app.js');
+
+      document.addEventListener('DOMContentLoaded', ()=>{
+        document.querySelectorAll('[data-versioned-src]').forEach(el=>{
+          const base = el.getAttribute('data-versioned-src');
+          if(!base) return;
+          const sep = base.includes('?') ? '&' : '?';
+          el.setAttribute('src', base + sep + 'v=' + versionParam);
+        });
+      });
+    }
+
+    fetch(metaUrl + '?ts=' + Date.now(), {cache:'no-store'})
+      .then(res=>{
+        if(!res.ok){ throw new Error('Metadaten konnten nicht geladen werden.'); }
+        return res.json();
+      })
+      .then(applyMeta)
+      .catch(err=>{
+        console.error(err);
+        applyMeta();
+      });
+  })();
+</script>
 </head>
 <body>
 <div class="wrap">
@@ -26,7 +86,7 @@
       </div>
 
       <div class="controls-center">
-        <div class="brand"><img src="./assets/img/Logo_Haas.jpg" alt="Haas Logo"/></div>
+        <div class="brand"><img data-versioned-src="./assets/img/Logo_Haas.jpg" alt="Haas Logo"/></div>
       </div>
 
       <div class="controls-right">
@@ -108,6 +168,5 @@
   </div>
 </div>
 
-  <script defer src="./scripts/app.js"></script>
 </body>
 </html>

@@ -1,0 +1,7 @@
+{
+  "version": "V1.1.0",
+  "buildDate": "2024-06-05",
+  "defaultFile": "Artikelpreisliste.xlsx",
+  "defaultFilePath": "./data/Artikelpreisliste.xlsx",
+  "buildSource": "./data/Artikelpreisliste.xlsx"
+}
