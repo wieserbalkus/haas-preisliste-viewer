@@ -1,6 +1,20 @@
 (function(global){
   const HaasApp = global.HaasApp || (global.HaasApp = {});
 
+  if(typeof global.requestAnimationFrame !== 'function'){
+    global.requestAnimationFrame = (cb)=>global.setTimeout(()=>{
+      try{ cb(Date.now()); }
+      catch(err){
+        if(global.console && typeof global.console.error === 'function'){
+          global.console.error('requestAnimationFrame callback error', err);
+        }
+      }
+    }, 16);
+  }
+  if(typeof global.cancelAnimationFrame !== 'function'){
+    global.cancelAnimationFrame = (handle)=>global.clearTimeout(handle);
+  }
+
   /* ================= Basis-Einstellungen ================ */
   const META_DEFAULTS = {
     version: 'dev',
@@ -193,17 +207,69 @@
     const esc = escapeHtml(s);
     return esc.replace(rx, '<mark class="hl">$1</mark>');
   }
+  const BASE_LOCATION = (global.location && typeof global.location.href === 'string')
+    ? global.location.href
+    : 'https://localhost/';
+
+  const EMAIL_RE = /^[\w.+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+
   function toSafeHref(raw){
     if(!raw) return '';
     let s = String(raw).trim();
-    if(/^mailto:/i.test(s)) return s;
-    if(/^[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}$/.test(s)) return 'mailto:'+s;
-    if(!/^(https?:)?\/\//i.test(s)){
-      if(/^www\./i.test(s)) s = 'http://' + s;
-      else if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(s)) return '';
+    if(!s) return '';
+    s = s.replace(/[\u0000-\u001F\u007F]/g, '');
+    if(!s) return '';
+
+    if(/^mailto:/i.test(s)){
+      const addrPart = s.slice(7);
+      const [addrRaw, queryRaw=''] = addrPart.split('?');
+      if(!EMAIL_RE.test(addrRaw)) return '';
+      const query = queryRaw ? '?' + encodeURI(queryRaw) : '';
+      return 'mailto:' + addrRaw + query;
     }
-    if(!/^https?:\/\//i.test(s)) s = s;
-    return s;
+
+    if(EMAIL_RE.test(s)){
+      return 'mailto:' + s;
+    }
+
+    const ensureHttpUrl = (value)=>{
+      try{
+        if(typeof URL === 'function'){
+          const url = new URL(value, BASE_LOCATION);
+          if(url.protocol === 'http:' || url.protocol === 'https:'){
+            return url.href;
+          }
+          return '';
+        }
+      }catch(err){
+        try{
+          const encoded = encodeURI(value);
+          if(typeof URL === 'function'){
+            const url = new URL(encoded, BASE_LOCATION);
+            if(url.protocol === 'http:' || url.protocol === 'https:'){
+              return url.href;
+            }
+          }
+          return /^(https?:)?\/\//i.test(value) ? encoded : '';
+        }catch{}
+        return '';
+      }
+      return /^(https?:)?\/\//i.test(value) ? encodeURI(value) : '';
+    };
+
+    if(/^https?:\/\//i.test(s)){
+      return ensureHttpUrl(s);
+    }
+
+    if(/^\/\//.test(s)){
+      return ensureHttpUrl('https:' + s);
+    }
+
+    if(/^www\./i.test(s)){
+      return ensureHttpUrl('https://' + s);
+    }
+
+    return '';
   }
   function linkify(escapedHtml){
     if(!escapedHtml) return '';
