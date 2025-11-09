@@ -126,7 +126,7 @@ function buildPrintDoc(){
   const BETR=($('#betreffInput')?.value||'').trim()||'–';
   const DAT=new Date().toLocaleDateString('de-AT');
   const SHEET = CURRENT_SHEET || '–';
-  const logoUrl = versionedAsset('./assets/img/Logo_Haas.jpg');
+  const logoUrl = new URL(versionedAsset('./assets/img/Logo_Haas.jpg'), window.location.href).href;
 
   let tbody=''; let sumMain=0; let sumAlt=0;
   items.forEach(it=>{
@@ -205,7 +205,7 @@ function buildPrintDoc(){
         </div>
       </div>
       <div class="rightcol">
-        <img src="'+logoUrl+'" class="logo" alt="Logo" />
+        <img src="${logoUrl}" class="logo" alt="Logo" />
         <div class="created"><b>Erstellt am:</b> ${escapeHtml(DAT)}</div>
       </div>
     </div>
