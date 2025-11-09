@@ -46,7 +46,9 @@
 
       appendLink('./styles/app.css');
       appendLink('./styles/print.css', {media:'print'});
-      appendScript('./scripts/app.js');
+      ['meta','storage','render','print','init'].forEach(name=>{
+        appendScript(`./scripts/${name}.js`);
+      });
 
       function applyVersionedSrcs(){
         document.querySelectorAll('[data-versioned-src]').forEach(el=>{
