@@ -1,7 +1,7 @@
 /* ================= Basis-Einstellungen ================ */
 const META_DEFAULTS = {
   version: 'dev',
-  buildDate: '',
+  buildDate: '2025-11-10',
   defaultFile: 'Artikelpreisliste.xlsx',
   defaultFilePath: './data/Artikelpreisliste.xlsx',
   buildSource: './data/Artikelpreisliste.xlsx'

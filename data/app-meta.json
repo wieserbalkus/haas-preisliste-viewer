@@ -1,6 +1,6 @@
 {
   "version": "V1.1.0",
-  "buildDate": "2024-06-05",
+  "buildDate": "2025-11-10",
   "defaultFile": "Artikelpreisliste.xlsx",
   "defaultFilePath": "./data/Artikelpreisliste.xlsx",
   "buildSource": "./data/Artikelpreisliste.xlsx"
