@@ -126,7 +126,7 @@ function buildPrintDoc(){
   const BETR=($('#betreffInput')?.value||'').trim()||'–';
   const DAT=new Date().toLocaleDateString('de-AT');
   const SHEET = CURRENT_SHEET || '–';
-  const logoUrl = versionedAsset('./assets/img/Logo_Haas.jpg');
+  const logoUrl = new URL(versionedAsset('./assets/img/Logo_Haas.jpg'), window.location.href).href;
 
   let tbody=''; let sumMain=0; let sumAlt=0;
   items.forEach(it=>{
