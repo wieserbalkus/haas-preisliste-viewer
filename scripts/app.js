@@ -1,10 +1,34 @@
 /* ================= Basis-Einstellungen ================ */
-const APP_VERSION = 'V1.1.0';
-const APP_BUILD_DATE = '2024-06-05';
-const DEFAULT_FILE = 'Artikelpreisliste.xlsx';
-const DEFAULT_FILE_PATH = `./data/${DEFAULT_FILE}`;
-const APP_BUILD_SOURCE = DEFAULT_FILE_PATH;
-const DEFAULT_FILE_URL = `${DEFAULT_FILE_PATH}?v=${APP_VERSION}`;
+const META_DEFAULTS = {
+  version: 'dev',
+  buildDate: '',
+  defaultFile: 'Artikelpreisliste.xlsx',
+  defaultFilePath: './data/Artikelpreisliste.xlsx',
+  buildSource: './data/Artikelpreisliste.xlsx'
+};
+
+const APP_META = Object.assign({}, META_DEFAULTS, window.APP_META || {});
+if(!APP_META.defaultFilePath){
+  APP_META.defaultFilePath = `./data/${APP_META.defaultFile || META_DEFAULTS.defaultFile}`;
+}
+if(!APP_META.buildSource){
+  APP_META.buildSource = APP_META.defaultFilePath;
+}
+
+function versionedAsset(path){
+  if(!path) return path;
+  const versionValue = APP_META.version || META_DEFAULTS.version;
+  const encoded = encodeURIComponent(versionValue);
+  return path.includes('?') ? `${path}&v=${encoded}` : `${path}?v=${encoded}`;
+}
+
+const APP_VERSION = APP_META.version || META_DEFAULTS.version;
+const APP_BUILD_DATE = APP_META.buildDate || META_DEFAULTS.buildDate;
+const DEFAULT_FILE = APP_META.defaultFile || META_DEFAULTS.defaultFile;
+const DEFAULT_FILE_PATH = APP_META.defaultFilePath;
+const APP_BUILD_SOURCE = APP_META.buildSource;
+const DEFAULT_FILE_URL = versionedAsset(DEFAULT_FILE_PATH);
+const VERSION_CHECK_INTERVAL = 60_000;
 
 /* ================= Hilfsfunktionen ==================== */
 function $(q){return document.querySelector(q)}
@@ -36,6 +60,33 @@ function triggerUpdatedBadge(){
   toastTimer = setTimeout(()=>toast.classList.remove('show'), 1600);
 }
 function isSonderEditable(id){ const s=String(id||'').replace(/\D/g,''); return /(?:98|99)$/.test(s); }
+
+function startVersionWatcher(){
+  const metaUrl = window.APP_META_URL || './data/app-meta.json';
+  if(!metaUrl) return;
+  let currentVersion = APP_VERSION || META_DEFAULTS.version;
+
+  async function checkForUpdates(){
+    try{
+      const res = await fetch(metaUrl + '?ts=' + Date.now(), {cache:'no-store'});
+      if(!res.ok) return;
+      const data = await res.json();
+      if(data && data.version && data.version !== currentVersion){
+        currentVersion = data.version;
+        const toast = document.getElementById('toast');
+        if(toast){
+          toast.textContent = 'Neue Version verfügbar – Seite wird neu geladen…';
+          toast.classList.add('show');
+        }
+        setTimeout(()=>window.location.reload(), 1200);
+      }
+    }catch(err){
+      console.warn('Versionsprüfung fehlgeschlagen', err);
+    }
+  }
+
+  setInterval(checkForUpdates, VERSION_CHECK_INTERVAL);
+}
 
 const DIACRITICS_RE = /[\u0300-\u036f]/g;
 function normalizeText(value){
@@ -1684,6 +1735,7 @@ function buildPrintDoc(){
   const BETR=($('#betreffInput')?.value||'').trim()||'–';
   const DAT=new Date().toLocaleDateString('de-AT');
   const SHEET = CURRENT_SHEET || '–';
+  const logoUrl = versionedAsset('./assets/img/Logo_Haas.jpg');
 
   let tbody=''; let sumMain=0; let sumAlt=0;
   items.forEach(it=>{
@@ -1762,7 +1814,7 @@ function buildPrintDoc(){
         </div>
       </div>
       <div class="rightcol">
-        <img src="./assets/img/Logo_Haas.jpg" class="logo" alt="Logo" />
+        <img src="'+logoUrl+'" class="logo" alt="Logo" />
         <div class="created"><b>Erstellt am:</b> ${escapeHtml(DAT)}</div>
       </div>
     </div>
@@ -1824,6 +1876,7 @@ document.getElementById('printSummary').addEventListener('click', ()=>{
 
 /* ================= Init =============================== */
 window.addEventListener('DOMContentLoaded', async ()=>{
+  startVersionWatcher();
   try{ localStorage.clear(); sessionStorage.clear(); }catch{}
   applyVersionInfo();
   ['#search','#fA','#fB','#fC','#groupFilter','#bvhInput','#auftragInput','#erstellerInput','#betreffInput'].forEach(sel=>{

@@ -60,7 +60,7 @@
 
     <div class="controls">
       <div class="controls-center">
-        <div class="brand"><img src="./assets/img/Logo_Haas.jpg" alt="Haas Logo"></div>
+        <div class="brand"><img data-versioned-src="./assets/img/Logo_Haas.jpg" alt="Haas Logo"></div>
       </div>
     </div>
 
@@ -95,5 +95,22 @@
 
   </div>
 </div>
+<script>
+  (function(){
+    const metaUrl = './data/app-meta.json';
+    fetch(metaUrl + '?ts=' + Date.now(), {cache:'no-store'})
+      .then(res => res.ok ? res.json() : {})
+      .catch(()=>({}))
+      .then(meta => {
+        const version = encodeURIComponent((meta && meta.version) || 'dev');
+        document.querySelectorAll('[data-versioned-src]').forEach(el => {
+          const base = el.getAttribute('data-versioned-src');
+          if(!base) return;
+          const sep = base.includes('?') ? '&' : '?';
+          el.setAttribute('src', base + sep + 'v=' + version);
+        });
+      });
+  })();
+</script>
 </body>
 </html>
