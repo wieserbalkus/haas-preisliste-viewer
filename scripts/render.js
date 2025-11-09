@@ -45,12 +45,64 @@ function extractRows(ws){
     }
     return out;
   }catch{
-    const json=XLSX.utils.sheet_to_json(ws,{defval:""}); if(!json.length) return [];
-    const k=Object.keys(json[0]);
-    return json.map(r=>{
-      const row={ id:String(r[k[0]]||'').trim(), kurz_raw:String(r[k[1]]||'').trim(), beschreibung_raw:String(r[k[2]]||'').trim(),
-        einheit:String(r[k[3]]||'').trim(), einheitInfo:String(r[k[4]]||'').trim(), preis:r[k[5]], hinweis_raw:String(r[k[6]]||'').trim(),
-        styleB:null, styleC:null, linkB:'', linkC:'', linkG:'' };
+    const rows = XLSX.utils.sheet_to_json(ws,{header:1, defval:''});
+    if(!rows.length) return [];
+    const headerCandidates = {
+      id:['id','artnr','artikelnr','artikelnummer','artikelnummern','artnummer'],
+      kurz:['kurztext','kurz','kurzbezeichnung','kurzbeschreibung','bezeichnungkurz','bezeichnung','titel'],
+      beschreibung:['beschreibung','langtext','langbeschreibung','detailbeschreibung','text','beschreibunglang'],
+      einheit:['einheit','eh','mengeneinheit','einheiten','mge','einheitkz'],
+      einheitInfo:['einheitinfo','einheitinformation','ehinfo','einheitinfozusatz','einheitdetails'],
+      preis:['preis','ehpreis','einheitspreis','nettopreis','betrag','preisnetto','preisbrutto','verkaufspreis'],
+      hinweis:['hinweis','notiz','bemerkung','anmerkung','info','kommentar']
+    };
+    const normalizeHeaderName = (value)=>{
+      if(value == null) return '';
+      return normalizeText(value).replace(/[^a-z0-9]+/g,'');
+    };
+    const headerRow = Array.isArray(rows[0]) ? rows[0] : [];
+    const normalizedHeaders = headerRow.map(normalizeHeaderName);
+    const fieldIndexes = {};
+    for(const [field, names] of Object.entries(headerCandidates)){
+      fieldIndexes[field] = -1;
+      for(const candidate of names){
+        const idx = normalizedHeaders.indexOf(candidate);
+        if(idx !== -1){ fieldIndexes[field] = idx; break; }
+      }
+    }
+    const hasHeader = Object.values(fieldIndexes).some(idx=>idx>=0);
+    const dataRows = hasHeader ? rows.slice(1) : rows.slice();
+    const defaultOrder = {id:0, kurz:1, beschreibung:2, einheit:3, einheitInfo:4, preis:5, hinweis:6};
+    const result = [];
+    for(const rawRow of dataRows){
+      const cols = Array.isArray(rawRow) ? rawRow : [];
+      const getString = (field)=>{
+        const idx = fieldIndexes[field] >= 0 ? fieldIndexes[field] : defaultOrder[field];
+        if(idx == null) return '';
+        const value = cols[idx];
+        if(value == null) return '';
+        return typeof value === 'string' ? value.trim() : String(value).trim();
+      };
+      const id = getString('id');
+      const kurz = getString('kurz');
+      const beschr = getString('beschreibung');
+      if(!(id||kurz||beschr)) continue;
+      const preisIdx = fieldIndexes.preis >= 0 ? fieldIndexes.preis : defaultOrder.preis;
+      const preisValue = preisIdx != null && preisIdx < cols.length ? cols[preisIdx] : '';
+      const row={
+        id,
+        kurz_raw:kurz,
+        beschreibung_raw:beschr,
+        styleB:null,
+        styleC:null,
+        einheit:getString('einheit'),
+        einheitInfo:getString('einheitInfo'),
+        preis:preisValue,
+        hinweis_raw:getString('hinweis'),
+        linkB:'',
+        linkC:'',
+        linkG:''
+      };
       row.norm = {
         id: normalizeText(row.id),
         kurz: normalizeText(row.kurz_raw),
@@ -61,8 +113,9 @@ function extractRows(ws){
         hinweis: normalizeText(row.hinweis_raw),
         haystack: normalizeText([row.id,row.kurz_raw,row.beschreibung_raw,row.einheit,row.einheitInfo,row.preis,row.hinweis_raw].join(' \u2022 '))
       };
-      return row;
-    });
+      result.push(row);
+    }
+    return result;
   }
 }
 function buildGroups(rows){
@@ -500,9 +553,22 @@ function scheduleVirtualUpdate(force){
   requestAnimationFrame(()=>{ VIRTUAL.pending=false; updateVirtualRange(false); });
 }
 function fillGroupFilter(){
-  const sel=$('#groupFilter'); const val=sel.value;
-  sel.innerHTML='<option value="">Obergruppe (alle)</option>'+GROUPS.map(g=>`<option value="${g.groupId}">${escapeHtml(g.title||'')}</option>`).join('');
-  if([...sel.options].some(o=>o.value===val)) sel.value=val;
+  const sel=$('#groupFilter'); if(!sel) return;
+  const previousValue = sel.value;
+  sel.textContent='';
+  const defaultOption=document.createElement('option');
+  defaultOption.value='';
+  defaultOption.textContent='Obergruppe (alle)';
+  sel.appendChild(defaultOption);
+  GROUPS.forEach(g=>{
+    const option=document.createElement('option');
+    option.value=g.groupId;
+    option.textContent=g.title||'';
+    sel.appendChild(option);
+  });
+  if(previousValue && Array.from(sel.options).some(opt=>opt.value===previousValue)){
+    sel.value=previousValue;
+  }
 }
 function render(){
   const body=$('#rows');
@@ -609,18 +675,47 @@ function recomputeChromeOffset(){
   const h = (controls?.offsetHeight||0) + (filters?.offsetHeight||0) + (thead?.offsetHeight||0);
   document.documentElement.style.setProperty('--chrome-offset', h + 'px');
 }
-const ro = new ResizeObserver(()=>recomputeChromeOffset());
-['#controls','#filters','#thead'].forEach(sel=>{
-  const el = document.querySelector(sel);
-  if(el) ro.observe(el);
-});
+const resizeTargets = ['#controls','#filters','#thead'];
+if(typeof ResizeObserver === 'function'){
+  const ro = new ResizeObserver(()=>recomputeChromeOffset());
+  resizeTargets.forEach(sel=>{
+    const el = document.querySelector(sel);
+    if(el) ro.observe(el);
+  });
+}else{
+  resizeTargets.forEach(sel=>{
+    const el = document.querySelector(sel);
+    if(el){
+      const handler = ()=>recomputeChromeOffset();
+      ['input','change','transitionend'].forEach(evt=>el.addEventListener(evt, handler));
+    }
+  });
+}
 window.addEventListener('resize', recomputeChromeOffset);
+recomputeChromeOffset();
 
 /* ================= Workbook =========================== */
 async function loadWorkbook(fileOrBuffer){
   const buf=(fileOrBuffer instanceof ArrayBuffer)?fileOrBuffer:await fileOrBuffer.arrayBuffer();
   const wb=XLSX.read(buf,{type:'array'}); LAST_WB=wb;
-  $('#sheetSel').innerHTML=wb.SheetNames.map((n,i)=>`<option value="${n}" ${i===0?'selected':''}>${n}</option>`).join('');
+  const sheetSelect = document.getElementById('sheetSel');
+  if(sheetSelect){
+    const previousValue = sheetSelect.value;
+    const frag = document.createDocumentFragment();
+    wb.SheetNames.forEach((name)=>{
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      frag.appendChild(option);
+    });
+    sheetSelect.textContent='';
+    sheetSelect.appendChild(frag);
+    if(previousValue && wb.SheetNames.includes(previousValue)){
+      sheetSelect.value = previousValue;
+    }else if(sheetSelect.options.length){
+      sheetSelect.selectedIndex = 0;
+    }
+  }
   return wb;
 }
 async function loadFromSelectedSheet(wb){
@@ -745,7 +840,7 @@ function focusSummaryEditor(lineId, field){
   if(!lineId) return;
   const wrap = $('#summaryTableWrap');
   if(!wrap) return;
-  const safeId = (typeof CSS!=='undefined' && CSS && typeof CSS.escape==='function') ? CSS.escape(lineId) : lineId.replace(/"/g,'\\"');
+  const safeId = cssEscape(lineId);
   const selectors = [];
   if(field){
     selectors.push(`[data-line-id="${safeId}"][data-field="${field}"]`);

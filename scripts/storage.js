@@ -133,7 +133,7 @@ function setAltFlag(lineId, checked){
   item.isAlternative = next;
   const wrap = $('#summaryTableWrap');
   if(wrap){
-    const safeId = (typeof CSS!=='undefined' && CSS && typeof CSS.escape==='function') ? CSS.escape(lineId) : lineId.replace(/"/g,'\\"');
+    const safeId = cssEscape(lineId);
     const row = wrap.querySelector(`[data-line-id="${safeId}"]`);
     if(row){
       row.dataset.alt = next ? 'true' : 'false';
