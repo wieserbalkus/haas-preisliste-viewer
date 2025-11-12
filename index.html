@@ -72,6 +72,12 @@
         </thead>
         <tbody id="rows"><tr class="empty"><td colspan="9">Noch keine Daten geladen.</td></tr></tbody>
       </table>
+
+      <section class="audio-library" id="audioLibrary" aria-labelledby="audioLibraryHeading" hidden>
+        <h2 id="audioLibraryHeading">Audio-Dateien</h2>
+        <p>Geladene Audio-Dateien können hier geöffnet und abgespielt werden.</p>
+        <div class="audio-list" id="audioList"></div>
+      </section>
     </div>
 
     <!-- ===== Bottom Drawer (Zusammenfassung) ===== -->
@@ -109,5 +115,6 @@
 </div>
 
   <script defer src="./scripts/app.js"></script>
+  <script defer src="./scripts/audio-player.js"></script>
 </body>
 </html>
